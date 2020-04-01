@@ -28,6 +28,8 @@
 #include <sdbusplus/asio/object_server.hpp>
 #include <string_view>
 
+#define multi_node
+
 namespace power_control
 {
 static boost::asio::io_service io;
@@ -1432,8 +1434,12 @@ static void powerStateWaitForPSPowerOK(const Event event)
             // Cancel any GPIO assertions held during the transition
             gpioAssertTimer.cancel();
             psPowerOKWatchdogTimer.cancel();
+#ifndef multi_node
             sioPowerGoodWatchdogTimerStart();
             setPowerState(PowerState::waitForSIOPowerGood);
+#else
+            setPowerState(PowerState::on);
+#endif
             break;
         case Event::psPowerOKWatchdogTimerExpired:
             setPowerState(PowerState::failedTransitionToOn);
@@ -1504,7 +1510,11 @@ static void powerStateOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
+#ifndef multi_node
             setPowerState(PowerState::waitForSIOPowerGood);
+#else
+            setPowerState(PowerState::on);
+#endif
             break;
         case Event::sioS5DeAssert:
             setPowerState(PowerState::waitForPSPowerOK);
@@ -2012,6 +2022,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+#ifndef multi_node
     // Request SIO_POWER_GOOD GPIO events
     if (!power_control::requestGPIOEvents(
             "SIO_POWER_GOOD", power_control::sioPowerGoodHandler,
@@ -2035,6 +2046,7 @@ int main(int argc, char* argv[])
     {
         return -1;
     }
+#endif
 
     // Request POWER_BUTTON GPIO events
     if (!power_control::requestGPIOEvents(
