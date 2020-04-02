@@ -43,6 +43,11 @@ static std::shared_ptr<sdbusplus::asio::dbus_interface> osIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> idButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> nmiOutIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> restartCauseIface;
+#ifdef multi_node
+static std::shared_ptr<sdbusplus::asio::dbus_interface> chassis1Iface;
+static std::shared_ptr<sdbusplus::asio::dbus_interface> chassis2Iface;
+static std::shared_ptr<sdbusplus::asio::dbus_interface> chassis3Iface;
+#endif
 
 static gpiod::line powerButtonMask;
 static gpiod::line resetButtonMask;
@@ -66,6 +71,12 @@ static bool nmiEnabled = true;
 static constexpr const char* nmiOutName = "NMI_OUT";
 static constexpr const char* powerOutName = "POWER_OUT";
 static constexpr const char* resetOutName = "RESET_OUT";
+
+#ifdef multi_node
+static constexpr const char* powerOutName1 = "POWER_OUT1";
+static constexpr const char* powerOutName2 = "POWER_OUT2";
+static constexpr const char* powerOutName3 = "POWER_OUT3";
+#endif
 
 // Timers
 // Time holding GPIOs asserted
@@ -108,6 +119,15 @@ static gpiod::line postCompleteLine;
 static boost::asio::posix::stream_descriptor postCompleteEvent(io);
 static gpiod::line nmiOutLine;
 
+#ifdef multi_node
+static gpiod::line psPowerOKLine1;
+static boost::asio::posix::stream_descriptor psPowerOKEvent1(io);
+static gpiod::line psPowerOKLine2;
+static boost::asio::posix::stream_descriptor psPowerOKEvent2(io);
+static gpiod::line psPowerOKLine3;
+static boost::asio::posix::stream_descriptor psPowerOKEvent3(io);
+#endif
+
 static constexpr uint8_t beepPowerFail = 8;
 
 static void beep(const uint8_t& beepPriority)
@@ -126,6 +146,36 @@ static void beep(const uint8_t& beepPriority)
         },
         "xyz.openbmc_project.BeepCode", "/xyz/openbmc_project/BeepCode",
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
+}
+
+enum class Host
+{
+    host0,
+    host1,
+    host2,
+    host3,
+};
+static Host host;
+static const std::string& getPowerOutName(Host host)
+{
+    switch (host)
+    {
+        case Host::host0:
+            return powerOutName;
+            break;
+        case Host::host1:
+            return powerOutName1;
+            break;
+        case Host::host2:
+            return powerOutName2;
+            break;
+        case Host::host3:
+            return powerOutName3;
+            break;
+        default:
+            return "unknown host";
+            break;
+    }
 }
 
 enum class PowerState
@@ -1068,17 +1118,20 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
 
 static void powerOn()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    const std::string &powerOut = getPowerOutName(host);
+    setGPIOOutputForMs(powerOut, 0, powerPulseTimeMs);
 }
 
 static void gracefulPowerOff()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    const std::string &powerOut = getPowerOutName(host);
+    setGPIOOutputForMs(powerOut, 0, powerPulseTimeMs);
 }
 
 static void forcePowerOff()
 {
-    if (setGPIOOutputForMs(power_control::powerOutName, 0,
+    const std::string &powerOut = getPowerOutName(host);
+    if (setGPIOOutputForMs(powerOut, 0,
                            forceOffPulseTimeMs) < 0)
     {
         return;
@@ -1667,6 +1720,76 @@ static void psPowerOKHandler()
         });
 }
 
+#ifdef multi_node
+static void psPowerOKHandler1()
+{
+    gpiod::line_event gpioLineEvent = psPowerOKLine1.event_read();
+
+    Event powerControlEvent =
+        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
+            ? Event::psPowerOKAssert
+            : Event::psPowerOKDeAssert;
+
+    sendPowerControlEvent(powerControlEvent);
+    psPowerOKEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "Host1 power supply power OK handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            psPowerOKHandler1();
+        });
+}
+
+static void psPowerOKHandler2()
+{
+    gpiod::line_event gpioLineEvent = psPowerOKLine2.event_read();
+
+    Event powerControlEvent =
+        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
+            ? Event::psPowerOKAssert
+            : Event::psPowerOKDeAssert;
+
+    sendPowerControlEvent(powerControlEvent);
+    psPowerOKEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "Host2 power supply power OK handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            psPowerOKHandler2();
+        });
+}
+
+static void psPowerOKHandler3()
+{
+    gpiod::line_event gpioLineEvent = psPowerOKLine3.event_read();
+
+    Event powerControlEvent =
+        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
+            ? Event::psPowerOKAssert
+            : Event::psPowerOKDeAssert;
+
+    sendPowerControlEvent(powerControlEvent);
+    psPowerOKEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "Host3 power supply power OK handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            psPowerOKHandler3();
+        });
+}
+#endif
 static void sioPowerGoodHandler()
 {
     gpiod::line_event gpioLineEvent = sioPowerGoodLine.event_read();
@@ -2001,6 +2124,7 @@ static void postCompleteHandler()
 int main(int argc, char* argv[])
 {
     std::cerr << "Start Chassis power control service...\n";
+    std::cerr << "Change 1 : Bypassed Sio-Power GOod for power on Multinode...\n";
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
@@ -2021,6 +2145,31 @@ int main(int argc, char* argv[])
     {
         return -1;
     }
+#ifdef multi_node
+    // Request PS_PWROK1 GPIO events
+    if (!power_control::requestGPIOEvents(
+            "PS_PWROK1", power_control::psPowerOKHandler1,
+            power_control::psPowerOKLine1, power_control::psPowerOKEvent1))
+    {
+        return -1;
+    }
+
+    // Request PS_PWROK2 GPIO events
+    if (!power_control::requestGPIOEvents(
+            "PS_PWROK2", power_control::psPowerOKHandler2,
+            power_control::psPowerOKLine2, power_control::psPowerOKEvent2))
+    {
+        return -1;
+    }
+
+    // Request PS_PWROK3 GPIO events
+    if (!power_control::requestGPIOEvents(
+            "PS_PWROK3", power_control::psPowerOKHandler3,
+            power_control::psPowerOKLine3, power_control::psPowerOKEvent3))
+    {
+        return -1;
+    }
+#endif
 
 #ifndef multi_node
     // Request SIO_POWER_GOOD GPIO events
@@ -2197,23 +2346,26 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
+                power_control::host = power_control::Host::host0;
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
+                power_control::host = power_control::Host::host0;
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
+                power_control::host = power_control::Host::host0;
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else
-            {
+            {                
                 std::cerr << "Unrecognized chassis state transition request.\n";
                 throw std::invalid_argument("Unrecognized Transition Request");
                 return 0;
@@ -2228,6 +2380,158 @@ int main(int argc, char* argv[])
         "LastStateChangeTime", power_control::getCurrentTimeMs());
 
     power_control::chassisIface->initialize();
+
+#ifdef multi_node
+    // Chassis1 Control Service
+    sdbusplus::asio::object_server chassis1Server =
+        sdbusplus::asio::object_server(power_control::conn);
+
+    // Chassis1 Control Interface
+    power_control::chassis1Iface =
+        chassis1Server.add_interface("/xyz/openbmc_project/state/chassis1",
+                                    "xyz.openbmc_project.State.Chassis");
+
+    power_control::chassis1Iface->register_property(
+        "RequestedPowerTransition",
+        std::string("xyz.openbmc_project.State.Chassis.Transition.Off"),
+        [](const std::string& requested, std::string& resp) {
+            if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
+            {
+                power_control::host = power_control::Host::host1;
+                sendPowerControlEvent(power_control::Event::powerOffRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.On")
+            {
+                power_control::host = power_control::Host::host1;
+                sendPowerControlEvent(power_control::Event::powerOnRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
+            {
+                power_control::host = power_control::Host::host1;
+                sendPowerControlEvent(power_control::Event::powerCycleRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else
+            {                
+                std::cerr << "Unrecognized chassis state transition request.\n";
+                throw std::invalid_argument("Unrecognized Transition Request");
+                return 0;
+            }
+            resp = requested;
+            return 1;
+        });
+    power_control::chassis1Iface->register_property(
+        "CurrentPowerState",
+        std::string(power_control::getChassisState(power_control::powerState)));
+    power_control::chassis1Iface->register_property(
+        "LastStateChangeTime", power_control::getCurrentTimeMs());
+
+    power_control::chassis1Iface->initialize();
+
+    // Chassis2 Control Service
+    sdbusplus::asio::object_server chassis2Server =
+        sdbusplus::asio::object_server(power_control::conn);
+
+    // Chassis2 Control Interface
+    power_control::chassis2Iface =
+        chassis2Server.add_interface("/xyz/openbmc_project/state/chassis2",
+                                    "xyz.openbmc_project.State.Chassis");
+
+    power_control::chassis2Iface->register_property(
+        "RequestedPowerTransition",
+        std::string("xyz.openbmc_project.State.Chassis.Transition.Off"),
+        [](const std::string& requested, std::string& resp) {
+            if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
+            {
+                power_control::host = power_control::Host::host2;
+                sendPowerControlEvent(power_control::Event::powerOffRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.On")
+            {
+                power_control::host = power_control::Host::host2;
+                sendPowerControlEvent(power_control::Event::powerOnRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
+            {
+                power_control::host = power_control::Host::host2;
+                sendPowerControlEvent(power_control::Event::powerCycleRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else
+            {
+                std::cerr << "Unrecognized chassis state transition request.\n";
+                throw std::invalid_argument("Unrecognized Transition Request");
+                return 0;
+            }
+            resp = requested;
+            return 1;
+        });
+    power_control::chassis2Iface->register_property(
+        "CurrentPowerState",
+        std::string(power_control::getChassisState(power_control::powerState)));
+    power_control::chassis2Iface->register_property(
+        "LastStateChangeTime", power_control::getCurrentTimeMs());
+
+    power_control::chassis2Iface->initialize();
+
+    // Chassis3 Control Service
+    sdbusplus::asio::object_server chassis3Server =
+        sdbusplus::asio::object_server(power_control::conn);
+
+    // Chassis3 Control Interface
+    power_control::chassis3Iface =
+        chassis3Server.add_interface("/xyz/openbmc_project/state/chassis3",
+                                    "xyz.openbmc_project.State.Chassis");
+
+    power_control::chassis3Iface->register_property(
+        "RequestedPowerTransition",
+        std::string("xyz.openbmc_project.State.Chassis.Transition.Off"),
+        [](const std::string& requested, std::string& resp) {
+            if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
+            {
+                power_control::host = power_control::Host::host3;
+                sendPowerControlEvent(power_control::Event::powerOffRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.On")
+            {
+                power_control::host = power_control::Host::host3;
+                sendPowerControlEvent(power_control::Event::powerOnRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
+            {
+                power_control::host = power_control::Host::host3;
+                sendPowerControlEvent(power_control::Event::powerCycleRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else
+            {
+                std::cerr << "Unrecognized chassis state transition request.\n";
+                throw std::invalid_argument("Unrecognized Transition Request");
+                return 0;
+            }
+            resp = requested;
+            return 1;
+        });
+    power_control::chassis3Iface->register_property(
+        "CurrentPowerState",
+        std::string(power_control::getChassisState(power_control::powerState)));
+    power_control::chassis3Iface->register_property(
+        "LastStateChangeTime", power_control::getCurrentTimeMs());
+
+    power_control::chassis3Iface->initialize();
+#endif
 
     // Buttons Service
     sdbusplus::asio::object_server buttonsServer =
