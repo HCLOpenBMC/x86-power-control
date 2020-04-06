@@ -69,14 +69,8 @@ const static constexpr std::string_view powerStateFile = "power-state";
 
 static bool nmiEnabled = true;
 static constexpr const char* nmiOutName = "NMI_OUT";
-static constexpr const char* powerOutName = "POWER_OUT";
+static std::string powerOutName = "POWER_OUT";
 static constexpr const char* resetOutName = "RESET_OUT";
-
-#ifdef multi_node
-static constexpr const char* powerOutName1 = "POWER_OUT1";
-static constexpr const char* powerOutName2 = "POWER_OUT2";
-static constexpr const char* powerOutName3 = "POWER_OUT3";
-#endif
 
 // Timers
 // Time holding GPIOs asserted
@@ -148,35 +142,6 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
 
-enum class Host
-{
-    host0,
-    host1,
-    host2,
-    host3,
-};
-static Host host;
-static const std::string& getPowerOutName(Host host)
-{
-    switch (host)
-    {
-        case Host::host0:
-            return powerOutName;
-            break;
-        case Host::host1:
-            return powerOutName1;
-            break;
-        case Host::host2:
-            return powerOutName2;
-            break;
-        case Host::host3:
-            return powerOutName3;
-            break;
-        default:
-            return "unknown host";
-            break;
-    }
-}
 
 enum class PowerState
 {
@@ -1118,20 +1083,17 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
 
 static void powerOn()
 {
-    const std::string &powerOut = getPowerOutName(host);
-    setGPIOOutputForMs(powerOut, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
 }
 
 static void gracefulPowerOff()
 {
-    const std::string &powerOut = getPowerOutName(host);
-    setGPIOOutputForMs(powerOut, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
 }
 
 static void forcePowerOff()
 {
-    const std::string &powerOut = getPowerOutName(host);
-    if (setGPIOOutputForMs(powerOut, 0,
+    if (setGPIOOutputForMs(power_control::powerOutName, 0,
                            forceOffPulseTimeMs) < 0)
     {
         return;
@@ -1731,7 +1693,7 @@ static void psPowerOKHandler1()
             : Event::psPowerOKDeAssert;
 
     sendPowerControlEvent(powerControlEvent);
-    psPowerOKEvent.async_wait(
+    psPowerOKEvent1.async_wait(
         boost::asio::posix::stream_descriptor::wait_read,
         [](const boost::system::error_code ec) {
             if (ec)
@@ -1754,7 +1716,7 @@ static void psPowerOKHandler2()
             : Event::psPowerOKDeAssert;
 
     sendPowerControlEvent(powerControlEvent);
-    psPowerOKEvent.async_wait(
+    psPowerOKEvent2.async_wait(
         boost::asio::posix::stream_descriptor::wait_read,
         [](const boost::system::error_code ec) {
             if (ec)
@@ -1777,7 +1739,7 @@ static void psPowerOKHandler3()
             : Event::psPowerOKDeAssert;
 
     sendPowerControlEvent(powerControlEvent);
-    psPowerOKEvent.async_wait(
+    psPowerOKEvent3.async_wait(
         boost::asio::posix::stream_descriptor::wait_read,
         [](const boost::system::error_code ec) {
             if (ec)
@@ -2346,21 +2308,21 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::host = power_control::Host::host0;
+                power_control::powerOutName = "POWER_OUT";
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::host = power_control::Host::host0;
+                power_control::powerOutName = "POWER_OUT";
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::host = power_control::Host::host0;
+                power_control::powerOutName = "POWER_OUT";
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
@@ -2397,21 +2359,21 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::host = power_control::Host::host1;
+                power_control::powerOutName = "POWER_OUT1";
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::host = power_control::Host::host1;
+                power_control::powerOutName = "POWER_OUT1";
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::host = power_control::Host::host1;
+                power_control::powerOutName = "POWER_OUT1";
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
@@ -2447,21 +2409,21 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::host = power_control::Host::host2;
+                power_control::powerOutName = "POWER_OUT2";
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::host = power_control::Host::host2;
+                power_control::powerOutName = "POWER_OUT2";
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::host = power_control::Host::host2;
+                power_control::powerOutName = "POWER_OUT2";
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
@@ -2497,21 +2459,21 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::host = power_control::Host::host3;
+                power_control::powerOutName = "POWER_OUT3";
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::host = power_control::Host::host3;
+                power_control::powerOutName = "POWER_OUT3";
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::host = power_control::Host::host3;
+                power_control::powerOutName = "POWER_OUT3";
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
