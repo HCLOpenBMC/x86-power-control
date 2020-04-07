@@ -27,6 +27,7 @@
 #include <iostream>
 #include <sdbusplus/asio/object_server.hpp>
 #include <string_view>
+//#include <nlohmann/json.hpp>
 
 #define multi_node
 
@@ -142,6 +143,58 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
 
+struct Config
+{
+    int nodes,
+    srting sioEnabled;
+};
+Config config;
+
+enum class GpioType
+{
+    nonSio = 0,
+    sio = 1
+};
+GpioType type;
+
+static const std::unordered_map<std::string, GpioType>
+    GpioTypeMap = {{"no", GpioType::nonSio},
+                          {"yes", GpioType::sio}};
+
+static int loadConfigValues()
+{
+    constexpr const char *configFilePath =
+        "/usr/share/power-control/power-config.json";
+    std::ifstream configFile(configFilePath);
+    if (!configFile.is_open())
+    {
+		std::cerr << "loadConfigValues : Cannot open config path\n ";
+		return -1;
+	}
+	try
+    {
+        auto data = nlohmann::json::parse(configFile, nullptr);
+		const auto &powerConfig : data["config"];
+		uint8_t nodes = powerConfig["nodes"];
+		const std::string &typeSio = powerConfig["sio-enabled"];
+		power_control::type = GpioTypeMap.at(typeSio);
+		if(power_control::type ==  GpioType::nonSio)
+			std::cerr << "Test : It is non Sio Type \n";
+		else
+			 std::cerr << "Test : It is Sio Type \n";
+	}
+	catch (nlohmann::json::exception &e)
+    {
+        std::cerr << "loadConfigValues: Error parsing config file\n ";
+        return -1;
+    }
+    catch (std::out_of_range &e)
+    {
+        std::cerr << "loadConfigValues : Error invalid type\n ";
+        return -1;
+    }
+    return 0;
+}
 
 enum class PowerState
 {
@@ -2089,6 +2142,13 @@ int main(int argc, char* argv[])
     std::cerr << "Change 1 : Bypassed Sio-Power GOod for power on Multinode...\n";
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
+
+	// Load Config Values
+	if (power_control::loadConfigValues() < 0)
+    {
+    	std::cerr << "Error Loading Config Values\n ";
+        return -1;
+    }
 
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");

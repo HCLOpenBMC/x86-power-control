@@ -1,0 +1,8 @@
+{
+  "config": [
+    {
+      "nodes": 4,
+      "sio-enabled": "yes"
+    }
+  ]
+}

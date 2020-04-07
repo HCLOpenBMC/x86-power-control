@@ -24,9 +24,11 @@ install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-rtti")
-
+set (CONFIG_FILES ${PROJECT_SOURCE_DIR}/src/power-config.json)
 set(
   SERVICE_FILES
   ${PROJECT_SOURCE_DIR}/service_files/xyz.openbmc_project.Chassis.Control.Power.service
   )
+
 install(FILES ${SERVICE_FILES} DESTINATION /lib/systemd/system/)
+install(FILES ${CONFIG_FILES} DESTINATION /usr/share/power-control/)
