@@ -27,7 +27,7 @@
 #include <iostream>
 #include <sdbusplus/asio/object_server.hpp>
 #include <string_view>
-//#include <nlohmann/json.hpp>
+#include <nlohmann/json.hpp>
 
 #define multi_node
 
@@ -146,7 +146,7 @@ static void beep(const uint8_t& beepPriority)
 struct Config
 {
     int nodes,
-    srting sioEnabled;
+    string sioEnabled;
 };
 Config config;
 
@@ -211,6 +211,9 @@ enum class PowerState
     checkForWarmReset,
 };
 static PowerState powerState;
+static PowerState powerState1;
+static PowerState powerState2;
+static PowerState powerState3;
 static std::string getPowerStateName(PowerState state)
 {
     switch (state)
@@ -252,10 +255,6 @@ static std::string getPowerStateName(PowerState state)
             return "unknown state: " + std::to_string(static_cast<int>(state));
             break;
     }
-}
-static void logStateTransition(const PowerState state)
-{
-    std::cerr << "Moving to \"" << getPowerStateName(state) << "\" state.\n";
 }
 
 enum class Event
@@ -360,6 +359,61 @@ static void logEvent(const std::string_view stateHandler, const Event event)
               << " event received.\n";
 }
 
+enum class Chassis
+{
+    chassis0,
+    chassis1,
+    chassis2,
+    chassis3
+};
+static Chassis chassisName;
+
+static PowerState& getPowerState(Chassis chassis)
+{
+    switch (chassis)
+    {
+        case Chassis::chassis0:
+            return powerState;
+            break;
+        case Chassis::chassis1:
+            return powerState1;
+            break;
+        case Chassis::chassis2:
+            return powerState2;
+            break;
+        case Chassis::chassis3:
+            return powerState3;
+            break;        
+    }
+}
+
+static std::string getPowerOutName(Chassis chassis)
+{
+    switch (chassis)
+    {
+        case Chassis::chassis0:
+            return "POWER_OUT";
+            break;
+        case Chassis::chassis1:
+            return "POWER_OUT1";
+            break;
+        case Chassis::chassis2:
+            return "POWER_OUT2";
+            break;
+        case Chassis::chassis3:
+            return "POWER_OUT3";
+            break;
+        default:
+            return "unknown Chassis: " + std::to_string(static_cast<int>(chassis));
+            break;
+    }
+}
+
+static void logStateTransition(const PowerState state)
+{
+    std::cerr << "Moving to \"" << getPowerStateName(state) << "\" state for host" << static_cast<int>(chassisName) <<". \n";
+}     
+
 // Power state handlers
 static void powerStateOn(const Event event);
 static void powerStateWaitForPSPowerOK(const Event event);
@@ -418,7 +472,8 @@ static std::function<void(const Event)> getPowerStateHandler(PowerState state)
 
 static void sendPowerControlEvent(const Event event)
 {
-    std::function<void(const Event)> handler = getPowerStateHandler(powerState);
+    PowerState &powerstate = getPowerState(chassisName);
+    std::function<void(const Event)> handler = getPowerStateHandler(powerstate);
     if (handler == nullptr)
     {
         std::cerr << "Failed to find handler for power state: "
@@ -512,15 +567,36 @@ static void savePowerState(const PowerState state)
 }
 static void setPowerState(const PowerState state)
 {
-    powerState = state;
+    PowerState &powerstate = getPowerState(chassisName);
+    powerstate = state;
     logStateTransition(state);
 
     hostIface->set_property("CurrentHostState",
                             std::string(getHostState(powerState)));
 
-    chassisIface->set_property("CurrentPowerState",
+    switch (chassisName)
+    {
+        case Chassis::chassis0:
+            chassisIface->set_property("CurrentPowerState",
                                std::string(getChassisState(powerState)));
-    chassisIface->set_property("LastStateChangeTime", getCurrentTimeMs());
+            chassisIface->set_property("LastStateChangeTime", getCurrentTimeMs());
+            break;
+        case Chassis::chassis1:
+            chassis1Iface->set_property("CurrentPowerState",
+                               std::string(getChassisState(powerState)));
+            chassis1Iface->set_property("LastStateChangeTime", getCurrentTimeMs());
+            break;
+        case Chassis::chassis2:
+            chassis2Iface->set_property("CurrentPowerState",
+                               std::string(getChassisState(powerState)));
+            chassis2Iface->set_property("LastStateChangeTime", getCurrentTimeMs());
+            break;
+        case Chassis::chassis3:
+            chassis3Iface->set_property("CurrentPowerState",
+                               std::string(getChassisState(powerState)));
+            chassis3Iface->set_property("LastStateChangeTime", getCurrentTimeMs());
+            break;        
+    }    
 
     // Save the power state for the restore policy
     savePowerState(state);
@@ -2143,8 +2219,8 @@ int main(int argc, char* argv[])
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
-	// Load Config Values
-	if (power_control::loadConfigValues() < 0)
+    // Load Config Values
+    if (power_control::loadConfigValues() < 0)
     {
     	std::cerr << "Error Loading Config Values\n ";
         return -1;
@@ -2274,10 +2350,29 @@ int main(int argc, char* argv[])
 
     // Initialize the power state
     power_control::powerState = power_control::PowerState::off;
+    power_control::powerState1= power_control::PowerState::off;
+    power_control::powerState2 = power_control::PowerState::off;
+    power_control::powerState3 = power_control::PowerState::off;
+
     // Check power good
     if (power_control::psPowerOKLine.get_value() > 0)
     {
         power_control::powerState = power_control::PowerState::on;
+    }
+
+    if (power_control::psPowerOKLine1.get_value() > 0)
+    {
+        power_control::powerState1 = power_control::PowerState::on;
+    }
+
+    if (power_control::psPowerOKLine2.get_value() > 0)
+    {
+        power_control::powerState2 = power_control::PowerState::on;
+    }
+
+    if (power_control::psPowerOKLine3.get_value() > 0)
+    {
+        power_control::powerState3 = power_control::PowerState::on;
     }
 
     // Initialize the power state storage
@@ -2368,21 +2463,24 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::powerOutName = "POWER_OUT";
+                power_control::chassisName = power_control::Chassis::chassis0;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::powerOutName = "POWER_OUT";
+                power_control::chassisName = power_control::Chassis::chassis0;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::powerOutName = "POWER_OUT";
+                power_control::chassisName = power_control::Chassis::chassis0;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
@@ -2419,21 +2517,24 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::powerOutName = "POWER_OUT1";
+                power_control::chassisName = power_control::Chassis::chassis1;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::powerOutName = "POWER_OUT1";
+                power_control::chassisName = power_control::Chassis::chassis1;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::powerOutName = "POWER_OUT1";
+                power_control::chassisName = power_control::Chassis::chassis1;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
@@ -2469,21 +2570,24 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::powerOutName = "POWER_OUT2";
+                power_control::chassisName = power_control::Chassis::chassis2;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::powerOutName = "POWER_OUT2";
+                power_control::chassisName = power_control::Chassis::chassis2;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::powerOutName = "POWER_OUT2";
+                power_control::chassisName = power_control::Chassis::chassis2;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
@@ -2519,21 +2623,24 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                power_control::powerOutName = "POWER_OUT3";
+                power_control::chassisName = power_control::Chassis::chassis3;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                power_control::powerOutName = "POWER_OUT3";
+                power_control::chassisName = power_control::Chassis::chassis3;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::powerOutName = "POWER_OUT3";
+                power_control::chassisName = power_control::Chassis::chassis3;
+                power_control::powerOutName = power_control::getPowerOutName(power_control::chassisName);
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
