@@ -118,15 +118,6 @@ static gpiod::line postCompleteLine;
 static boost::asio::posix::stream_descriptor postCompleteEvent(io);
 static gpiod::line nmiOutLine;
 
-#ifdef multi_node
-//static gpiod::line psPowerOKLine1;
-static boost::asio::posix::stream_descriptor psPowerOKEvent1(io);
-//static gpiod::line psPowerOKLine2;
-static boost::asio::posix::stream_descriptor psPowerOKEvent2(io);
-//static gpiod::line psPowerOKLine3;
-static boost::asio::posix::stream_descriptor psPowerOKEvent3(io);
-#endif
-
 static constexpr uint8_t beepPowerFail = 8;
 
 static void beep(const uint8_t& beepPriority)
@@ -1870,76 +1861,6 @@ static void psPowerOKHandler(int &node)
         });
 }
 
-#ifdef multi_node
-static void psPowerOKHandler1()
-{
-    gpiod::line_event gpioLineEvent = psPowerOKLine[1].event_read();
-
-    Event powerControlEvent =
-        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
-            ? Event::psPowerOKAssert
-            : Event::psPowerOKDeAssert;
-
-    sendPowerControlEvent(powerControlEvent);
-    psPowerOKEvent1.async_wait(
-        boost::asio::posix::stream_descriptor::wait_read,
-        [](const boost::system::error_code ec) {
-            if (ec)
-            {
-                std::cerr << "Host1 power supply power OK handler error: "
-                          << ec.message() << "\n";
-                return;
-            }
-            psPowerOKHandler1();
-        });
-}
-
-static void psPowerOKHandler2()
-{
-    gpiod::line_event gpioLineEvent = psPowerOKLine[2].event_read();
-
-    Event powerControlEvent =
-        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
-            ? Event::psPowerOKAssert
-            : Event::psPowerOKDeAssert;
-
-    sendPowerControlEvent(powerControlEvent);
-    psPowerOKEvent2.async_wait(
-        boost::asio::posix::stream_descriptor::wait_read,
-        [](const boost::system::error_code ec) {
-            if (ec)
-            {
-                std::cerr << "Host2 power supply power OK handler error: "
-                          << ec.message() << "\n";
-                return;
-            }
-            psPowerOKHandler2();
-        });
-}
-
-static void psPowerOKHandler3()
-{
-    gpiod::line_event gpioLineEvent = psPowerOKLine[3].event_read();
-
-    Event powerControlEvent =
-        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
-            ? Event::psPowerOKAssert
-            : Event::psPowerOKDeAssert;
-
-    sendPowerControlEvent(powerControlEvent);
-    psPowerOKEvent3.async_wait(
-        boost::asio::posix::stream_descriptor::wait_read,
-        [](const boost::system::error_code ec) {
-            if (ec)
-            {
-                std::cerr << "Host3 power supply power OK handler error: "
-                          << ec.message() << "\n";
-                return;
-            }
-            psPowerOKHandler3();
-        });
-}
-#endif
 static void sioPowerGoodHandler()
 {
     gpiod::line_event gpioLineEvent = sioPowerGoodLine.event_read();
@@ -2289,6 +2210,7 @@ int main(int argc, char* argv[])
     //Initilizing the values
     power_control::psPowerOKLine.resize(nodes);
 	std::vector<std::string> pwrOk = {"PS_PWROK", "PS_PWROK1", "PS_PWROK2", "PS_PWROK3" };
+	std::vector<std::string> interface = {"/xyz/openbmc_project/state/host0", "/xyz/openbmc_project/state/host1", "/xyz/openbmc_project/state/host2", "/xyz/openbmc_project/state/host3" };
 
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
@@ -2313,43 +2235,6 @@ int main(int argc, char* argv[])
 	    }
 	}
 
-
-/*	int a =0;
-    // Request PS_PWROK GPIO events
-    if (!power_control::requestGPIOEvents(
-            pwrOk[a], power_control::psPowerOKHandler,
-            power_control::psPowerOKLine[0], power_control::psPowerOKEvent[0],a))
-    {
-        return -1;
-    }
-
-	a+=1;
-#ifdef multi_node
-    // Request PS_PWROK1 GPIO events
-    if (!power_control::requestGPIOEvents(
-            pwrOk[a], power_control::psPowerOKHandler,
-            power_control::psPowerOKLine[1], power_control::psPowerOKEvent[1],a))
-    {
-        return -1;
-    }
-a+=1;
-    // Request PS_PWROK2 GPIO events
-    if (!power_control::requestGPIOEvents(
-            pwrOk[a], power_control::psPowerOKHandler,
-            power_control::psPowerOKLine[2], power_control::psPowerOKEvent[2],a))
-    {
-        return -1;
-    }
-a+=1;
-    // Request PS_PWROK3 GPIO events
-    if (!power_control::requestGPIOEvents(
-            pwrOk[a], power_control::psPowerOKHandler,
-            power_control::psPowerOKLine[3], power_control::psPowerOKEvent[3],a))
-    {
-        return -1;
-    }
-#endif
-*/
 #ifndef multi_node
     // Request SIO_POWER_GOOD GPIO events
     if (!power_control::requestGPIOEvents(
@@ -2535,7 +2420,7 @@ a+=1;
 
     // Chassis Control Interface
     power_control::chassisIface =
-        chassisServer.add_interface("/xyz/openbmc_project/state/chassis0",
+        chassisServer.add_interface(interface[0],
                                     "xyz.openbmc_project.State.Chassis");
 
     power_control::chassisIface->register_property(
