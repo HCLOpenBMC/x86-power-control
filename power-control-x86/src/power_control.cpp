@@ -40,7 +40,7 @@ namespace power_control
 static boost::asio::io_service io;
 std::shared_ptr<sdbusplus::asio::connection> conn;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
-static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
+std::vector<std::shared_ptr<sdbusplus::asio::dbus_interface>> chassisIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> powerButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> resetButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> nmiButtonIface;
@@ -73,9 +73,11 @@ const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
 
 static bool nmiEnabled = true;
+static int chassisNumber =0;
 static constexpr const char* nmiOutName = "NMI_OUT";
 static std::string powerOutName = "POWER_OUT";
 static constexpr const char* resetOutName = "RESET_OUT";
+std::vector<std::string> pwrOut;
 
 // Timers
 // Time holding GPIOs asserted
@@ -205,10 +207,11 @@ enum class PowerState
     gracefulTransitionToCycleOff,
     checkForWarmReset,
 };
-static PowerState powerState;
+std::vector<PowerState> powerState;
+/*static PowerState powerState;
 static PowerState powerState1;
 static PowerState powerState2;
-static PowerState powerState3;
+static PowerState powerState3;*/
 static std::string getPowerStateName(PowerState state)
 {
     switch (state)
@@ -354,7 +357,7 @@ static void logEvent(const std::string_view stateHandler, const Event event)
               << " event received.\n";
 }
 
-enum class Chassis
+/*enum class Chassis
 {
     chassis0,
     chassis1,
@@ -402,11 +405,11 @@ static std::string getPowerOutName(Chassis chassis)
             return "unknown Chassis: " + std::to_string(static_cast<int>(chassis));
             break;
     }
-}
+}*/
 
 static void logStateTransition(const PowerState state)
 {
-    std::cerr << "Moving to \"" << getPowerStateName(state) << "\" state for host" << static_cast<int>(chassisName) <<". \n";
+    std::cerr << "Moving to \"" << getPowerStateName(state) << "\" state for host" << chassisNumber <<". \n";
 }     
 
 // Power state handlers
@@ -467,12 +470,12 @@ static std::function<void(const Event)> getPowerStateHandler(PowerState state)
 
 static void sendPowerControlEvent(const Event event)
 {
-    PowerState &powerstate = getPowerState(chassisName);
+    PowerState &powerstate = powerState[chassisNumber];
     std::function<void(const Event)> handler = getPowerStateHandler(powerstate);
     if (handler == nullptr)
     {
         std::cerr << "Failed to find handler for power state: "
-                  << static_cast<int>(powerState) << "\n";
+                  << static_cast<int>(powerState[chassisNumber]) << "\n";
         return;
     }
     handler(event);
@@ -561,38 +564,17 @@ static void savePowerState(const PowerState state)
     });
 }
 static void setPowerState(const PowerState state)
-{
-    PowerState &powerstate = getPowerState(chassisName);
-    powerstate = state;
+{    
+    powerState[chassisNumber] = state;
     logStateTransition(state);
 
     hostIface->set_property("CurrentHostState",
-                            std::string(getHostState(powerState)));
+                            std::string(getHostState(powerState[chassisNumber])));
 
-    switch (chassisName)
-    {
-        case Chassis::chassis0:
-            chassisIface->set_property("CurrentPowerState",
-                               std::string(getChassisState(powerState)));
-            chassisIface->set_property("LastStateChangeTime", getCurrentTimeMs());
-            break;
-        case Chassis::chassis1:
-            chassis1Iface->set_property("CurrentPowerState",
-                               std::string(getChassisState(powerState)));
-            chassis1Iface->set_property("LastStateChangeTime", getCurrentTimeMs());
-            break;
-        case Chassis::chassis2:
-            chassis2Iface->set_property("CurrentPowerState",
-                               std::string(getChassisState(powerState)));
-            chassis2Iface->set_property("LastStateChangeTime", getCurrentTimeMs());
-            break;
-        case Chassis::chassis3:
-            chassis3Iface->set_property("CurrentPowerState",
-                               std::string(getChassisState(powerState)));
-            chassis3Iface->set_property("LastStateChangeTime", getCurrentTimeMs());
-            break;        
-    }    
-
+    chassisIface[chassisNumber]->set_property("CurrentPowerState",
+                       std::string(getChassisState(powerState[chassisNumber])));
+    chassisIface[chassisNumber]->set_property("LastStateChangeTime", getCurrentTimeMs());
+           
     // Save the power state for the restore policy
     savePowerState(state);
 }
@@ -783,7 +765,7 @@ static int initializePowerStateStorage()
     if (!std::filesystem::exists(powerControlDir / powerStateFile))
     {
         std::ofstream powerStateStream(powerControlDir / powerStateFile);
-        powerStateStream << getChassisState(powerState);
+        powerStateStream << getChassisState(powerState[chassisNumber]);
     }
     return 0;
 }
@@ -836,7 +818,7 @@ static void invokePowerRestorePolicy(const std::string& policy)
     }
     // We're done with the previous power state for the restore policy, so store
     // the current state
-    savePowerState(powerState);
+    savePowerState(powerState[chassisNumber]);
 }
 
 static void powerRestorePolicyDelay(int delay)
@@ -1420,7 +1402,7 @@ static void pohCounterTimerStart()
             return;
         }
 
-        if (getHostState(powerState) !=
+        if (getHostState(powerState[chassisNumber]) !=
             "xyz.openbmc_project.State.Host.HostState.Running")
         {
             return;
@@ -1466,7 +1448,7 @@ static void pohCounterTimerStart()
 
 static void currentHostStateMonitor()
 {
-    if (getHostState(powerState) ==
+    if (getHostState(powerState[chassisNumber]) ==
         "xyz.openbmc_project.State.Host.HostState.Running")
     {
         pohCounterTimerStart();
@@ -2190,6 +2172,66 @@ static void postCompleteHandler()
             postCompleteHandler();
         });
 }
+
+void AddChassisInterface(int node)
+{
+    // Chassis Control Service
+    sdbusplus::asio::object_server chassisServer =
+        sdbusplus::asio::object_server(power_control::conn);
+
+    std::string interface = "/xyz/openbmc_project/state/host";
+    std::string interfaceName = interface + std::to_string(node);
+
+    // Chassis Control Interface
+    power_control::chassisIface[node] =
+        chassisServer.add_interface(interfaceName,
+                                    "xyz.openbmc_project.State.Chassis");
+
+    power_control::chassisIface[node]->register_property(
+        "RequestedPowerTransition",
+        std::string("xyz.openbmc_project.State.Chassis.Transition.Off"),
+        [node](const std::string& requested, std::string& resp) {
+            if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
+            {
+                power_control::chassisNumber = node;
+                power_control::powerOutName = pwrOut[node];
+                sendPowerControlEvent(power_control::Event::powerOffRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.On")
+            {
+                power_control::chassisNumber = node;
+                power_control::powerOutName = pwrOut[node];;
+                sendPowerControlEvent(power_control::Event::powerOnRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else if (requested ==
+                     "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
+            {
+                power_control::chassisNumber = node;
+                power_control::powerOutName = pwrOut[node];;
+                sendPowerControlEvent(power_control::Event::powerCycleRequest);
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else
+            {                
+                std::cerr << "Unrecognized chassis state transition request.\n";
+                throw std::invalid_argument("Unrecognized Transition Request");
+                return 0;
+            }
+            resp = requested;
+            return 1;
+        });
+    power_control::chassisIface[node]->register_property(
+        "CurrentPowerState",
+        std::string(power_control::getChassisState(power_control::powerState[node])));
+    power_control::chassisIface[node]->register_property(
+        "LastStateChangeTime", power_control::getCurrentTimeMs());
+
+    power_control::chassisIface[node]->initialize();
+}
+
 } // namespace power_control
 
 int main(int argc, char* argv[])
@@ -2209,9 +2251,12 @@ int main(int argc, char* argv[])
     
     //Initilizing the values
     power_control::psPowerOKLine.resize(nodes);
+    power_control::chassisIface.resize(nodes);
+    power_control::powerState.resize(nodes);
 	std::vector<std::string> pwrOk = {"PS_PWROK", "PS_PWROK1", "PS_PWROK2", "PS_PWROK3" };
-	std::vector<std::string> interface = {"/xyz/openbmc_project/state/host0", "/xyz/openbmc_project/state/host1", "/xyz/openbmc_project/state/host2", "/xyz/openbmc_project/state/host3" };
+    power_control::pwrOut = {"POWER_OUT", "POWER_OUT1", "POWER_OUT2", "POWER_OUT3" };
 
+	
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
     power_control::conn->request_name("xyz.openbmc_project.State.Chassis");
@@ -2314,17 +2359,24 @@ int main(int argc, char* argv[])
     // Release line
     line.reset();
 
-    // Initialize the power state
-    power_control::powerState = power_control::PowerState::off;
+
+    for(int i =0;i<nodes;i++)
+    {       
+        power_control::powerState[i] = power_control::PowerState::off;
+         // Check power good
+        if (power_control::psPowerOKLine[i].get_value() > 0)
+        {
+            power_control::powerState[i] = power_control::PowerState::on;
+        }
+    }
+
+    /*// Initialize the power state
+    power_control::powerState = 
     power_control::powerState1= power_control::PowerState::off;
     power_control::powerState2 = power_control::PowerState::off;
     power_control::powerState3 = power_control::PowerState::off;
 
-    // Check power good
-    if (power_control::psPowerOKLine[0].get_value() > 0)
-    {
-        power_control::powerState = power_control::PowerState::on;
-    }
+   
 
     if (power_control::psPowerOKLine[1].get_value() > 0)
     {
@@ -2339,7 +2391,7 @@ int main(int argc, char* argv[])
     if (power_control::psPowerOKLine[3].get_value() > 0)
     {
         power_control::powerState3 = power_control::PowerState::on;
-    }
+    }*/
 
     // Initialize the power state storage
     if (power_control::initializePowerStateStorage() < 0)
@@ -2354,7 +2406,7 @@ int main(int argc, char* argv[])
         power_control::nmiSourcePropertyMonitor();
 
     std::cerr << "Initializing power state. ";
-    power_control::logStateTransition(power_control::powerState);
+    power_control::logStateTransition(power_control::powerState[0]);
 
     // Power Control Service
     sdbusplus::asio::object_server hostServer =
@@ -2410,11 +2462,16 @@ int main(int argc, char* argv[])
         });
     power_control::hostIface->register_property(
         "CurrentHostState",
-        std::string(power_control::getHostState(power_control::powerState)));
+        std::string(power_control::getHostState(power_control::powerState[0])));
 
     power_control::hostIface->initialize();
 
-    // Chassis Control Service
+    for(int node =0;node<nodes;node++)
+    {
+        power_control::AddChassisInterface(node);
+    }
+
+    /*// Chassis Control Service
     sdbusplus::asio::object_server chassisServer =
         sdbusplus::asio::object_server(power_control::conn);
 
@@ -2466,8 +2523,8 @@ int main(int argc, char* argv[])
         "LastStateChangeTime", power_control::getCurrentTimeMs());
 
     power_control::chassisIface->initialize();
-
-#ifdef multi_node
+*/
+/*#ifdef multi_node
     // Chassis1 Control Service
     sdbusplus::asio::object_server chassis1Server =
         sdbusplus::asio::object_server(power_control::conn);
@@ -2626,7 +2683,7 @@ int main(int argc, char* argv[])
         "LastStateChangeTime", power_control::getCurrentTimeMs());
 
     power_control::chassis3Iface->initialize();
-#endif
+#endif*/
 
     // Buttons Service
     sdbusplus::asio::object_server buttonsServer =
