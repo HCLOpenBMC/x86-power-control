@@ -28,6 +28,8 @@
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 #include <string_view>
+#include <vector>
+#include <nlohmann/json.hpp>
 
 namespace power_control
 {
@@ -46,6 +48,9 @@ static std::shared_ptr<sdbusplus::asio::dbus_interface> restartCauseIface;
 static gpiod::line powerButtonMask;
 static gpiod::line resetButtonMask;
 static bool nmiButtonMasked = false;
+
+static std::string pwrOut;
+static std::string pwrOk;
 
 const static constexpr int powerPulseTimeMs = 200;
 const static constexpr int forceOffPulseTimeMs = 15000;
@@ -1993,13 +1998,50 @@ static void postCompleteHandler()
             postCompleteHandler();
         });
 }
+
+static int loadConfigValues()
+{
+    constexpr const char *configFilePath =
+        "/usr/share/power-control/power-config.json";
+    std::ifstream configFile(configFilePath);
+    if (!configFile.is_open())
+    {
+        std::cerr << "loadConfigValues : Cannot open config path\n ";
+        return -1;
+    }
+    try
+    {
+        auto data = nlohmann::json::parse(configFile, nullptr);
+        pwrOk = data["power-ok"];
+        pwrOut = data["power-out"];
+    }
+    catch (nlohmann::json::exception &e)
+    {
+        std::cerr << "loadConfigValues: Error parsing config file\n ";
+        return -1;
+    }
+    catch (std::out_of_range &e)
+    {
+        std::cerr << "loadConfigValues : Error invalid type\n ";
+        return -1;
+    }
+    return 0;
+}
+
 } // namespace power_control
 
 int main(int argc, char* argv[])
 {
-    std::cerr << "Start Chassis power control service...\n";
+    std::cerr << "Start Chassis power control service ...\n";
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
+
+    if(power_control::loadConfigValues()  == -1)
+    {
+	    std::cerr << "Error in Parsing...\n";
+    }
+
+    std::cerr << "Power Out :" <<power_control::pwrOut << " and  : "<< power_control::pwrOk <<" \n";
 
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
