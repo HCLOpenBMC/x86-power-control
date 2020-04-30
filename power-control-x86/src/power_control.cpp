@@ -2002,7 +2002,7 @@ static void postCompleteHandler()
 static int loadConfigValues()
 {
     constexpr const char *configFilePath =
-        "/usr/share/power-control/power-config.json";
+        "/usr/share/power-control/power-config.1.json";
     std::ifstream configFile(configFilePath);
     if (!configFile.is_open())
     {
