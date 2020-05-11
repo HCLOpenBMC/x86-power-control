@@ -5,7 +5,7 @@ ConditionPathExists=/usr/share/power-control/power-config.%i.json
 [Service]
 Restart=always
 RestartSec=3
-ExecStart=/usr/bin/power-control --config /usr/share/power-control/power-config.%i.json %i
+ExecStart=/usr/bin/power-control %i
 Type=dbus
 BusName=xyz.openbmc_project.State.Host
 

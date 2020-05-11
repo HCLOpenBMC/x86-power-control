@@ -51,6 +51,7 @@ static bool nmiButtonMasked = false;
 
 static std::string pwrOut;
 static std::string pwrOk;
+std::string node;
 
 const static constexpr int powerPulseTimeMs = 200;
 const static constexpr int forceOffPulseTimeMs = 15000;
@@ -2033,6 +2034,9 @@ static int loadConfigValues()
 int main(int argc, char* argv[])
 {
     std::cerr << "Start Chassis power control service ...\n";
+	power_control::node = argv[1];
+    std::cerr << "Node :"<<power_control::node <<"\n";
+
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
@@ -2044,14 +2048,19 @@ int main(int argc, char* argv[])
     std::cerr << "Power Out :" <<power_control::pwrOut << " and  : "<< power_control::pwrOk <<" \n";
 
     // Request all the dbus names
-    power_control::conn->request_name("xyz.openbmc_project.State.Host");
-    power_control::conn->request_name("xyz.openbmc_project.State.Chassis");
-    power_control::conn->request_name(
-        "xyz.openbmc_project.State.OperatingSystem");
-    power_control::conn->request_name("xyz.openbmc_project.Chassis.Buttons");
-    power_control::conn->request_name("xyz.openbmc_project.Control.Host.NMI");
-    power_control::conn->request_name(
-        "xyz.openbmc_project.Control.Host.RestartCause");
+    std::string hostName = "xyz.openbmc_project.State.Host" + power_control::node;
+	std::string chassisName = "xyz.openbmc_project.State.Chassis" + power_control::node;
+    std::string osName = "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
+	std::string buttonName = "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
+	std::string  nmiName = "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
+	std::string rstCauseName = "xyz.openbmc_project.Control.Host.RestartCause" + power_control::node;
+
+    power_control::conn->request_name(hostName.c_str());
+    power_control::conn->request_name(chassisName.c_str());
+    power_control::conn->request_name(osName.c_str());
+    power_control::conn->request_name(buttonName.c_str());
+    power_control::conn->request_name(nmiName.c_str());
+    power_control::conn->request_name(rstCauseName.c_str());
 
     // Request PS_PWROK GPIO events
     if (!power_control::requestGPIOEvents(
