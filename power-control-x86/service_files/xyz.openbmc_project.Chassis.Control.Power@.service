@@ -1,6 +1,6 @@
 [Unit]
 Description=Intel Power Control for the Chassis %i
-ConditionPathExists=/usr/share/power-control/power-config.%i.json
+ConditionPathExists=/usr/share/power-control/power-config%i.json
 
 [Service]
 Restart=always
