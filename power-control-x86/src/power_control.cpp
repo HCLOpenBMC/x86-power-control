@@ -69,7 +69,6 @@ const static constexpr std::string_view powerStateFile = "power-state";
 
 static bool nmiEnabled = true;
 static constexpr const char* nmiOutName = "NMI_OUT";
-static constexpr const char* powerOutName = "POWER_OUT";
 static constexpr const char* resetOutName = "RESET_OUT";
 
 // Timers
@@ -1040,7 +1039,7 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
                               const int durationMs)
 {
     // If the requested GPIO is masked, use the mask line to set the output
-    if (powerButtonMask && name == power_control::powerOutName)
+    if (powerButtonMask && name == power_control::pwrOut)
     {
         return setMaskedGPIOOutputForMs(powerButtonMask, name, value,
                                         durationMs);
@@ -1079,17 +1078,17 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
 
 static void powerOn()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(power_control::pwrOut, 0, powerPulseTimeMs);
 }
 
 static void gracefulPowerOff()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(power_control::pwrOut, 0, powerPulseTimeMs);
 }
 
 static void forcePowerOff()
 {
-    if (setGPIOOutputForMs(power_control::powerOutName, 0,
+    if (setGPIOOutputForMs(power_control::pwrOut, 0,
                            forceOffPulseTimeMs) < 0)
     {
         return;
@@ -2002,9 +2001,9 @@ static void postCompleteHandler()
 
 static int loadConfigValues()
 {
-    constexpr const char *configFilePath =
-        "/usr/share/power-control/power-config.1.json";
-    std::ifstream configFile(configFilePath);
+    std::string configFilePath =
+        "/usr/share/power-control/power-config" + power_control::node + ".json";
+    std::ifstream configFile(configFilePath.c_str());
     if (!configFile.is_open())
     {
         std::cerr << "loadConfigValues : Cannot open config path\n ";
@@ -2064,7 +2063,7 @@ int main(int argc, char* argv[])
 
     // Request PS_PWROK GPIO events
     if (!power_control::requestGPIOEvents(
-            "PS_PWROK", power_control::psPowerOKHandler,
+            power_control::pwrOk, power_control::psPowerOKHandler,
             power_control::psPowerOKLine, power_control::psPowerOKEvent))
     {
         return -1;
@@ -2134,7 +2133,7 @@ int main(int argc, char* argv[])
 
     // Initialize POWER_OUT and RESET_OUT GPIO.
     gpiod::line line;
-    if (!power_control::setGPIOOutput(power_control::powerOutName, 1, line))
+    if (!power_control::setGPIOOutput(power_control::pwrOut, 1, line))
     {
         return -1;
     }
@@ -2293,7 +2292,7 @@ int main(int argc, char* argv[])
                     return 1;
                 }
                 if (!power_control::setGPIOOutput(
-                        power_control::powerOutName, 1,
+                        power_control::pwrOut, 1,
                         power_control::powerButtonMask))
                 {
                     throw std::runtime_error("Failed to request GPIO");
