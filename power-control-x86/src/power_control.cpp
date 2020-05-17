@@ -51,7 +51,18 @@ static bool nmiButtonMasked = false;
 
 static std::string pwrOut;
 static std::string pwrOk;
+static std::string resetOut; 
+static std::string nmiOut;
+static std::string sioPwrGood;
+static std::string sioOnCtrl;
+static std::string sioS5;
+static std::string nmiButton;
+static std::string idButton;
+static std::string postComplete;
+static std::string pwrButton;
+static std::string rstButton;
 std::string node;
+static bool sioDisabled = true;
 
 const static constexpr int powerPulseTimeMs = 200;
 const static constexpr int forceOffPulseTimeMs = 15000;
@@ -69,7 +80,6 @@ const static constexpr std::string_view powerStateFile = "power-state";
 
 static bool nmiEnabled = true;
 static constexpr const char* nmiOutName = "NMI_OUT";
-static constexpr const char* resetOutName = "RESET_OUT";
 
 // Timers
 // Time holding GPIOs asserted
@@ -1044,7 +1054,7 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
         return setMaskedGPIOOutputForMs(powerButtonMask, name, value,
                                         durationMs);
     }
-    if (resetButtonMask && name == power_control::resetOutName)
+    if (resetButtonMask && name == power_control::resetOut)
     {
         return setMaskedGPIOOutputForMs(resetButtonMask, name, value,
                                         durationMs);
@@ -1125,7 +1135,7 @@ static void forcePowerOff()
 
 static void reset()
 {
-    setGPIOOutputForMs(power_control::resetOutName, 0, resetPulseTimeMs);
+    setGPIOOutputForMs(power_control::resetOut, 0, resetPulseTimeMs);
 }
 
 static void gracefulPowerOffTimerStart()
@@ -1441,12 +1451,21 @@ static void powerStateWaitForPSPowerOK(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
+			{
             // Cancel any GPIO assertions held during the transition
             gpioAssertTimer.cancel();
             psPowerOKWatchdogTimer.cancel();
-            sioPowerGoodWatchdogTimerStart();
-            setPowerState(PowerState::waitForSIOPowerGood);
+			if(power_control::sioDisabled)
+			{
+				setPowerState(PowerState::on);
+			}
+			else
+			{
+            	sioPowerGoodWatchdogTimerStart();
+            	setPowerState(PowerState::waitForSIOPowerGood);
+			}
             break;
+			}
         case Event::psPowerOKWatchdogTimerExpired:
             setPowerState(PowerState::failedTransitionToOn);
             psPowerOKFailedLog();
@@ -1516,8 +1535,17 @@ static void powerStateOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
+			{
+			if(power_control::sioDisabled)
+			{
+				setPowerState(PowerState::on);
+			}
+			else
+			{
             setPowerState(PowerState::waitForSIOPowerGood);
+			}
             break;
+			}
         case Event::sioS5DeAssert:
             setPowerState(PowerState::waitForPSPowerOK);
             break;
@@ -2014,6 +2042,11 @@ static int loadConfigValues()
         auto data = nlohmann::json::parse(configFile, nullptr);
         pwrOk = data["power-ok"];
         pwrOut = data["power-out"];
+		resetOut =data["reset-out"];
+		pwrButton = data["power-button"];
+		rstButton = data["reset-button"];
+		postComplete = data["post-complete"];
+				
     }
     catch (nlohmann::json::exception &e)
     {
@@ -2069,6 +2102,13 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+	if(power_control::sioPwrGood.empty() && power_control::sioOnCtrl.empty() && power_control::sioS5.empty())
+	{
+		power_control::sioDisabled = true;
+	}
+	else
+	{
+
     // Request SIO_POWER_GOOD GPIO events
     if (!power_control::requestGPIOEvents(
             "SIO_POWER_GOOD", power_control::sioPowerGoodHandler,
@@ -2092,6 +2132,8 @@ int main(int argc, char* argv[])
     {
         return -1;
     }
+
+	}
 
     // Request POWER_BUTTON GPIO events
     if (!power_control::requestGPIOEvents(
@@ -2126,7 +2168,6 @@ int main(int argc, char* argv[])
     {
         return -1;
     }
-
     // initialize NMI_OUT GPIO.
     power_control::setGPIOOutput(power_control::nmiOutName, 0,
                                  power_control::nmiOutLine);
@@ -2138,7 +2179,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (!power_control::setGPIOOutput(power_control::resetOutName, 1, line))
+    if (!power_control::setGPIOOutput(power_control::resetOut, 1, line))
     {
         return -1;
     }
@@ -2163,8 +2204,8 @@ int main(int argc, char* argv[])
     // Check if we need to start the Power Restore policy
     power_control::powerRestorePolicyCheck();
 
-    if (power_control::nmiOutLine)
-        power_control::nmiSourcePropertyMonitor();
+//    if (power_control::nmiOutLine)
+//        power_control::nmiSourcePropertyMonitor();
 
     std::cerr << "Initializing power state. ";
     power_control::logStateTransition(power_control::powerState);
@@ -2274,7 +2315,8 @@ int main(int argc, char* argv[])
 
     power_control::chassisIface->initialize();
 
-    // Buttons Service
+  #if 0
+	  // Buttons Service
     sdbusplus::asio::object_server buttonsServer =
         sdbusplus::asio::object_server(power_control::conn);
 
@@ -2335,7 +2377,7 @@ int main(int argc, char* argv[])
                     return 1;
                 }
                 if (!power_control::setGPIOOutput(
-                        power_control::resetOutName, 1,
+                        power_control::resetOut, 1,
                         power_control::resetButtonMask))
                 {
                     throw std::runtime_error("Failed to request GPIO");
@@ -2488,7 +2530,7 @@ int main(int argc, char* argv[])
         });
 
     power_control::restartCauseIface->initialize();
-
+#endif
     power_control::currentHostStateMonitor();
 
     power_control::io.run();
