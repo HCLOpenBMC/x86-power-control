@@ -56,11 +56,6 @@ static std::string nmiOut;
 static std::string sioPwrGood;
 static std::string sioOnCtrl;
 static std::string sioS5;
-static std::string nmiButton;
-static std::string idButton;
-static std::string postComplete;
-static std::string pwrButton;
-static std::string rstButton;
 std::string node;
 static bool sioDisabled = true;
 
@@ -126,13 +121,13 @@ static constexpr uint8_t beepPowerFail = 8;
 
 static void beep(const uint8_t& beepPriority)
 {
-    std::cerr << "Beep with priority: " << (unsigned)beepPriority << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Beep with priority: " << (unsigned)beepPriority << "\n";
 
     conn->async_method_call(
         [](boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "beep returned error with "
+                std::cerr << "Host" << power_control::node << ": " <<  "beep returned error with "
                              "async_method_call (ec = "
                           << ec << ")\n";
                 return;
@@ -373,7 +368,7 @@ static void sendPowerControlEvent(const Event event)
     std::function<void(const Event)> handler = getPowerStateHandler(powerState);
     if (handler == nullptr)
     {
-        std::cerr << "Failed to find handler for power state: "
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to find handler for power state: "
                   << static_cast<int>(powerState) << "\n";
         return;
     }
@@ -453,7 +448,7 @@ static void savePowerState(const PowerState state)
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "Power-state save async_wait failed: "
+                std::cerr << "Host" << power_control::node << ": " <<  "Power-state save async_wait failed: "
                           << ec.message() << "\n";
             }
             return;
@@ -533,7 +528,7 @@ static void clearRestartCause()
 }
 static void setRestartCauseProperty(const std::string& cause)
 {
-    std::cerr << "RestartCause set to " << cause << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "RestartCause set to " << cause << "\n";
     restartCauseIface->set_property("RestartCause", cause);
 }
 
@@ -546,7 +541,7 @@ static void resetACBootProperty()
             [](boost::system::error_code ec) {
                 if (ec)
                 {
-                    std::cerr << "failed to reset ACBoot property\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "failed to reset ACBoot property\n";
                 }
             },
             "xyz.openbmc_project.Settings",
@@ -655,7 +650,7 @@ static int initializePowerStateStorage()
     {
         if (ec.value() != 0)
         {
-            std::cerr << "failed to create " << powerControlDir << ": "
+            std::cerr << "Host" << power_control::node << ": " <<  "failed to create " << powerControlDir << ": "
                       << ec.message() << "\n";
             return -1;
         }
@@ -674,7 +669,7 @@ static bool wasPowerDropped()
     std::ifstream powerStateStream(powerControlDir / powerStateFile);
     if (!powerStateStream.is_open())
     {
-        std::cerr << "Failed to open power state file\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to open power state file\n";
         return false;
     }
 
@@ -693,7 +688,7 @@ static void invokePowerRestorePolicy(const std::string& policy)
     }
     policyInvoked = true;
 
-    std::cerr << "Power restore delay expired, invoking " << policy << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Power restore delay expired, invoking " << policy << "\n";
     if (policy ==
         "xyz.openbmc_project.Control.Power.RestorePolicy.Policy.AlwaysOn")
     {
@@ -705,14 +700,14 @@ static void invokePowerRestorePolicy(const std::string& policy)
     {
         if (wasPowerDropped())
         {
-            std::cerr << "Power was dropped, restoring Host On state\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "Power was dropped, restoring Host On state\n";
             sendPowerControlEvent(Event::powerOnRequest);
             setRestartCauseProperty(
                 getRestartCause(RestartCause::powerPolicyRestore));
         }
         else
         {
-            std::cerr << "No power drop, restoring Host Off state\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No power drop, restoring Host Off state\n";
         }
     }
     // We're done with the previous power state for the restore policy, so store
@@ -744,7 +739,7 @@ static void powerRestorePolicyDelay(int delay)
 
     static boost::asio::steady_timer powerRestorePolicyTimer(io);
     powerRestorePolicyTimer.expires_after(std::chrono::seconds(delay));
-    std::cerr << "Power restore delay of " << delay << " seconds started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Power restore delay of " << delay << " seconds started\n";
     powerRestorePolicyTimer.async_wait([](const boost::system::error_code ec) {
         if (ec)
         {
@@ -752,7 +747,7 @@ static void powerRestorePolicyDelay(int delay)
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "power restore policy async_wait failed: "
+                std::cerr << "Host" << power_control::node << ": " <<  "power restore policy async_wait failed: "
                           << ec.message() << "\n";
             }
             return;
@@ -802,7 +797,7 @@ static void powerRestorePolicyDelay(int delay)
                     std::get_if<std::string>(&policyProperty);
                 if (policy == nullptr)
                 {
-                    std::cerr << "Unable to read power restore policy value\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "Unable to read power restore policy value\n";
                     return;
                 }
                 invokePowerRestorePolicy(*policy);
@@ -817,7 +812,7 @@ static void powerRestorePolicyDelay(int delay)
 
 static void powerRestorePolicyStart()
 {
-    std::cerr << "Power restore policy started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Power restore policy started\n";
     powerRestorePolicyLog();
 
     // Get the desired delay time
@@ -841,7 +836,7 @@ static void powerRestorePolicyStart()
                 }
                 catch (std::exception& e)
                 {
-                    std::cerr << "Unable to read power restore delay value\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "Unable to read power restore delay value\n";
                     powerRestoreDelayMatch.reset();
                     return;
                 }
@@ -861,7 +856,7 @@ static void powerRestorePolicyStart()
             const uint16_t* delay = std::get_if<uint16_t>(&delayProperty);
             if (delay == nullptr)
             {
-                std::cerr << "Unable to read power restore delay value\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "Unable to read power restore delay value\n";
                 return;
             }
             powerRestorePolicyDelay(*delay);
@@ -895,7 +890,7 @@ static void powerRestorePolicyCheck()
                 }
                 catch (std::exception& e)
                 {
-                    std::cerr << "Unable to read AC Boot status\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "Unable to read AC Boot status\n";
                     acBootMatch.reset();
                     return;
                 }
@@ -923,7 +918,7 @@ static void powerRestorePolicyCheck()
                 std::get_if<std::string>(&acBootProperty);
             if (acBoot == nullptr)
             {
-                std::cerr << "Unable to read AC Boot status\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "Unable to read AC Boot status\n";
                 return;
             }
             if (*acBoot == "Unknown")
@@ -952,7 +947,7 @@ static bool requestGPIOEvents(
     gpioLine = gpiod::find_line(name);
     if (!gpioLine)
     {
-        std::cerr << "Failed to find the " << name << " line\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to find the " << name << " line\n";
         return false;
     }
 
@@ -963,14 +958,14 @@ static bool requestGPIOEvents(
     }
     catch (std::exception&)
     {
-        std::cerr << "Failed to request events for " << name << "\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to request events for " << name << "\n";
         return false;
     }
 
     int gpioLineFd = gpioLine.event_get_fd();
     if (gpioLineFd < 0)
     {
-        std::cerr << "Failed to get " << name << " fd\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to get " << name << " fd\n";
         return false;
     }
 
@@ -981,7 +976,7 @@ static bool requestGPIOEvents(
         [&name, handler](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << name << " fd handler error: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  name << " fd handler error: " << ec.message()
                           << "\n";
                 // TODO: throw here to force power-control to restart?
                 return;
@@ -998,7 +993,7 @@ static bool setGPIOOutput(const std::string& name, const int value,
     gpioLine = gpiod::find_line(name);
     if (!gpioLine)
     {
-        std::cerr << "Failed to find the " << name << " line.\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to find the " << name << " line.\n";
         return false;
     }
 
@@ -1010,11 +1005,11 @@ static bool setGPIOOutput(const std::string& name, const int value,
     }
     catch (std::exception&)
     {
-        std::cerr << "Failed to request " << name << " output\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Failed to request " << name << " output\n";
         return false;
     }
 
-    std::cerr << name << " set to " << std::to_string(value) << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  name << " set to " << std::to_string(value) << "\n";
     return true;
 }
 
@@ -1024,20 +1019,20 @@ static int setMaskedGPIOOutputForMs(gpiod::line& maskedGPIOLine,
 {
     // Set the masked GPIO line to the specified value
     maskedGPIOLine.set_value(value);
-    std::cerr << name << " set to " << std::to_string(value) << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  name << " set to " << std::to_string(value) << "\n";
     gpioAssertTimer.expires_after(std::chrono::milliseconds(durationMs));
     gpioAssertTimer.async_wait(
         [maskedGPIOLine, value, name](const boost::system::error_code ec) {
             // Set the masked GPIO line back to the opposite value
             maskedGPIOLine.set_value(!value);
-            std::cerr << name << " released\n";
+            std::cerr << "Host" << power_control::node << ": " <<  name << " released\n";
             if (ec)
             {
                 // operation_aborted is expected if timer is canceled before
                 // completion.
                 if (ec != boost::asio::error::operation_aborted)
                 {
-                    std::cerr << name << " async_wait failed: " + ec.message()
+                    std::cerr << "Host" << power_control::node << ": " <<  name << " async_wait failed: " + ec.message()
                               << "\n";
                 }
             }
@@ -1071,14 +1066,14 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
         [gpioLine, value, name](const boost::system::error_code ec) {
             // Set the GPIO line back to the opposite value
             gpioLine.set_value(!value);
-            std::cerr << name << " released\n";
+            std::cerr << "Host" << power_control::node << ": " <<  name << " released\n";
             if (ec)
             {
                 // operation_aborted is expected if timer is canceled before
                 // completion.
                 if (ec != boost::asio::error::operation_aborted)
                 {
-                    std::cerr << name << " async_wait failed: " << ec.message()
+                    std::cerr << "Host" << power_control::node << ": " <<  name << " async_wait failed: " << ec.message()
                               << "\n";
                 }
             }
@@ -1113,12 +1108,12 @@ static void forcePowerOff()
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "Force power off async_wait failed: "
+                std::cerr << "Host" << power_control::node << ": " <<  "Force power off async_wait failed: "
                           << ec.message() << "\n";
             }
             return;
         }
-        std::cerr << "PCH Power-button override failed. Issuing Unconditional "
+        std::cerr << "Host" << power_control::node << ": " <<  "PCH Power-button override failed. Issuing Unconditional "
                      "Powerdown SMBus command.\n";
         const static constexpr size_t pchDevBusAddress = 3;
         const static constexpr size_t pchDevSlaveAddress = 0x44;
@@ -1127,7 +1122,7 @@ static void forcePowerOff()
         if (i2cSet(pchDevBusAddress, pchDevSlaveAddress, pchCmdReg,
                    pchPowerDownCmd) < 0)
         {
-            std::cerr << "Unconditional Powerdown command failed! Not sure "
+            std::cerr << "Host" << power_control::node << ": " <<  "Unconditional Powerdown command failed! Not sure "
                          "what to do now.\n";
         }
     });
@@ -1140,7 +1135,7 @@ static void reset()
 
 static void gracefulPowerOffTimerStart()
 {
-    std::cerr << "Graceful power-off timer started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Graceful power-off timer started\n";
     gracefulPowerOffTimer.expires_after(
         std::chrono::milliseconds(gracefulPowerOffTimeMs));
     gracefulPowerOffTimer.async_wait([](const boost::system::error_code ec) {
@@ -1150,20 +1145,20 @@ static void gracefulPowerOffTimerStart()
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "Graceful power-off async_wait failed: "
+                std::cerr << "Host" << power_control::node << ": " <<  "Graceful power-off async_wait failed: "
                           << ec.message() << "\n";
             }
-            std::cerr << "Graceful power-off timer canceled\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "Graceful power-off timer canceled\n";
             return;
         }
-        std::cerr << "Graceful power-off timer completed\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Graceful power-off timer completed\n";
         sendPowerControlEvent(Event::gracefulPowerOffTimerExpired);
     });
 }
 
 static void powerCycleTimerStart()
 {
-    std::cerr << "Power-cycle timer started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Power-cycle timer started\n";
     powerCycleTimer.expires_after(std::chrono::milliseconds(powerCycleTimeMs));
     powerCycleTimer.async_wait([](const boost::system::error_code ec) {
         if (ec)
@@ -1172,20 +1167,20 @@ static void powerCycleTimerStart()
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "Power-cycle async_wait failed: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "Power-cycle async_wait failed: " << ec.message()
                           << "\n";
             }
-            std::cerr << "Power-cycle timer canceled\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "Power-cycle timer canceled\n";
             return;
         }
-        std::cerr << "Power-cycle timer completed\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Power-cycle timer completed\n";
         sendPowerControlEvent(Event::powerCycleTimerExpired);
     });
 }
 
 static void psPowerOKWatchdogTimerStart()
 {
-    std::cerr << "power supply power OK watchdog timer started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "power supply power OK watchdog timer started\n";
     psPowerOKWatchdogTimer.expires_after(
         std::chrono::milliseconds(psPowerOKWatchdogTimeMs));
     psPowerOKWatchdogTimer.async_wait(
@@ -1200,17 +1195,17 @@ static void psPowerOKWatchdogTimerStart()
                         << "power supply power OK watchdog async_wait failed: "
                         << ec.message() << "\n";
                 }
-                std::cerr << "power supply power OK watchdog timer canceled\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "power supply power OK watchdog timer canceled\n";
                 return;
             }
-            std::cerr << "power supply power OK watchdog timer expired\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "power supply power OK watchdog timer expired\n";
             sendPowerControlEvent(Event::psPowerOKWatchdogTimerExpired);
         });
 }
 
 static void warmResetCheckTimerStart()
 {
-    std::cerr << "Warm reset check timer started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Warm reset check timer started\n";
     warmResetCheckTimer.expires_after(
         std::chrono::milliseconds(warmResetCheckTimeMs));
     warmResetCheckTimer.async_wait([](const boost::system::error_code ec) {
@@ -1220,20 +1215,20 @@ static void warmResetCheckTimerStart()
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "Warm reset check async_wait failed: "
+                std::cerr << "Host" << power_control::node << ": " <<  "Warm reset check async_wait failed: "
                           << ec.message() << "\n";
             }
-            std::cerr << "Warm reset check timer canceled\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "Warm reset check timer canceled\n";
             return;
         }
-        std::cerr << "Warm reset check timer completed\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Warm reset check timer completed\n";
         sendPowerControlEvent(Event::warmResetDetected);
     });
 }
 
 static void pohCounterTimerStart()
 {
-    std::cerr << "POH timer started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "POH timer started\n";
     // Set the time-out as 1 hour, to align with POH command in ipmid
     pohCounterTimer.expires_after(std::chrono::hours(1));
     pohCounterTimer.async_wait([](const boost::system::error_code& ec) {
@@ -1243,10 +1238,10 @@ static void pohCounterTimerStart()
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << "POH timer async_wait failed: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "POH timer async_wait failed: " << ec.message()
                           << "\n";
             }
-            std::cerr << "POH timer canceled\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "POH timer canceled\n";
             return;
         }
 
@@ -1261,14 +1256,14 @@ static void pohCounterTimerStart()
                const std::variant<uint32_t>& pohCounterProperty) {
                 if (ec)
                 {
-                    std::cerr << "error to get poh counter\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "error to get poh counter\n";
                     return;
                 }
                 const uint32_t* pohCounter =
                     std::get_if<uint32_t>(&pohCounterProperty);
                 if (pohCounter == nullptr)
                 {
-                    std::cerr << "unable to read poh counter\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "unable to read poh counter\n";
                     return;
                 }
 
@@ -1276,7 +1271,7 @@ static void pohCounterTimerStart()
                     [](boost::system::error_code ec) {
                         if (ec)
                         {
-                            std::cerr << "failed to set poh counter\n";
+                            std::cerr << "Host" << power_control::node << ": " <<  "failed to set poh counter\n";
                         }
                     },
                     "xyz.openbmc_project.Settings",
@@ -1329,7 +1324,7 @@ static void currentHostStateMonitor()
             }
             catch (const std::out_of_range& e)
             {
-                std::cerr << "Error in finding CurrentHostState property\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "Error in finding CurrentHostState property\n";
 
                 return;
             }
@@ -1369,7 +1364,7 @@ static void currentHostStateMonitor()
 
 static void sioPowerGoodWatchdogTimerStart()
 {
-    std::cerr << "SIO power good watchdog timer started\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "SIO power good watchdog timer started\n";
     sioPowerGoodWatchdogTimer.expires_after(
         std::chrono::milliseconds(sioPowerGoodWatchdogTimeMs));
     sioPowerGoodWatchdogTimer.async_wait(
@@ -1380,13 +1375,13 @@ static void sioPowerGoodWatchdogTimerStart()
                 // completion.
                 if (ec != boost::asio::error::operation_aborted)
                 {
-                    std::cerr << "SIO power good watchdog async_wait failed: "
+                    std::cerr << "Host" << power_control::node << ": " <<  "SIO power good watchdog async_wait failed: "
                               << ec.message() << "\n";
                 }
-                std::cerr << "SIO power good watchdog timer canceled\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "SIO power good watchdog timer canceled\n";
                 return;
             }
-            std::cerr << "SIO power good watchdog timer completed\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "SIO power good watchdog timer completed\n";
             sendPowerControlEvent(Event::sioPowerGoodWatchdogTimerExpired);
         });
 }
@@ -1440,7 +1435,7 @@ static void powerStateOn(const Event event)
             reset();
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1475,7 +1470,7 @@ static void powerStateWaitForPSPowerOK(const Event event)
             setPowerState(PowerState::on);
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1495,7 +1490,7 @@ static void powerStateWaitForSIOPowerGood(const Event event)
             forcePowerOff();
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1524,7 +1519,7 @@ static void powerStateFailedTransitionToOn(const Event event)
             powerOn();
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1559,7 +1554,7 @@ static void powerStateOff(const Event event)
             powerOn();
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1575,7 +1570,7 @@ static void powerStateTransitionToOff(const Event event)
             setPowerState(PowerState::off);
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1593,7 +1588,7 @@ static void powerStateGracefulTransitionToOff(const Event event)
             setPowerState(PowerState::on);
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1609,7 +1604,7 @@ static void powerStateCycleOff(const Event event)
             powerOn();
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1626,7 +1621,7 @@ static void powerStateTransitionToCycleOff(const Event event)
             powerCycleTimerStart();
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1645,7 +1640,7 @@ static void powerStateGracefulTransitionToCycleOff(const Event event)
             setPowerState(PowerState::on);
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1669,7 +1664,7 @@ static void powerStateCheckForWarmReset(const Event event)
             beep(beepPowerFail);
             break;
         default:
-            std::cerr << "No action taken.\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "No action taken.\n";
             break;
     }
 }
@@ -1689,7 +1684,7 @@ static void psPowerOKHandler()
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "power supply power OK handler error: "
+                std::cerr << "Host" << power_control::node << ": " <<  "power supply power OK handler error: "
                           << ec.message() << "\n";
                 return;
             }
@@ -1712,7 +1707,7 @@ static void sioPowerGoodHandler()
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "SIO power good handler error: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "SIO power good handler error: " << ec.message()
                           << "\n";
                 return;
             }
@@ -1726,13 +1721,13 @@ static void sioOnControlHandler()
 
     bool sioOnControl =
         gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE;
-    std::cerr << "SIO_ONCONTROL value changed: " << sioOnControl << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "SIO_ONCONTROL value changed: " << sioOnControl << "\n";
     sioOnControlEvent.async_wait(
         boost::asio::posix::stream_descriptor::wait_read,
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "SIO ONCONTROL handler error: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "SIO ONCONTROL handler error: " << ec.message()
                           << "\n";
                 return;
             }
@@ -1754,7 +1749,7 @@ static void sioS5Handler()
                           [](const boost::system::error_code ec) {
                               if (ec)
                               {
-                                  std::cerr << "SIO S5 handler error: "
+                                  std::cerr << "Host" << power_control::node << ": " <<  "SIO S5 handler error: "
                                             << ec.message() << "\n";
                                   return;
                               }
@@ -1777,7 +1772,7 @@ static void powerButtonHandler()
         }
         else
         {
-            std::cerr << "power button press masked\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "power button press masked\n";
         }
     }
     else if (gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE)
@@ -1789,7 +1784,7 @@ static void powerButtonHandler()
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "power button handler error: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "power button handler error: " << ec.message()
                           << "\n";
                 return;
             }
@@ -1812,7 +1807,7 @@ static void resetButtonHandler()
         }
         else
         {
-            std::cerr << "reset button press masked\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "reset button press masked\n";
         }
     }
     else if (gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE)
@@ -1824,7 +1819,7 @@ static void resetButtonHandler()
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "reset button handler error: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "reset button handler error: " << ec.message()
                           << "\n";
                 return;
             }
@@ -1838,7 +1833,7 @@ static void nmiSetEnablePorperty(bool value)
         [](boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "failed to set NMI source\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "failed to set NMI source\n";
             }
         },
         "xyz.openbmc_project.Settings",
@@ -1853,35 +1848,35 @@ static void nmiReset(void)
     static constexpr const uint8_t value = 1;
     const static constexpr int nmiOutPulseTimeMs = 200;
 
-    std::cerr << "NMI out action \n";
+    std::cerr << "Host" << power_control::node << ": " <<  "NMI out action \n";
     nmiOutLine.set_value(value);
-    std::cerr << nmiOutName << " set to " << std::to_string(value) << "\n";
+    std::cerr << "Host" << power_control::node << ": " <<  nmiOutName << " set to " << std::to_string(value) << "\n";
     gpioAssertTimer.expires_after(std::chrono::milliseconds(nmiOutPulseTimeMs));
     gpioAssertTimer.async_wait([](const boost::system::error_code ec) {
         // restore the NMI_OUT GPIO line back to the opposite value
         nmiOutLine.set_value(!value);
-        std::cerr << nmiOutName << " released\n";
+        std::cerr << "Host" << power_control::node << ": " <<  nmiOutName << " released\n";
         if (ec)
         {
             // operation_aborted is expected if timer is canceled before
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << nmiOutName << " async_wait failed: " + ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  nmiOutName << " async_wait failed: " + ec.message()
                           << "\n";
             }
         }
     });
     // log to redfish
     nmiDiagIntLog();
-    std::cerr << "NMI out action completed\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "NMI out action completed\n";
     // reset Enable Property
     nmiSetEnablePorperty(false);
 }
 
 static void nmiSourcePropertyMonitor(void)
 {
-    std::cerr << " NMI Source Property Monitor \n";
+    std::cerr << "Host" << power_control::node << ": " <<  " NMI Source Property Monitor \n";
 
     static std::unique_ptr<sdbusplus::bus::match::match> nmiSourceMatch =
         std::make_unique<sdbusplus::bus::match::match>(
@@ -1916,7 +1911,7 @@ static void nmiSourcePropertyMonitor(void)
                 }
                 catch (std::exception& e)
                 {
-                    std::cerr << "Unable to read NMI source\n";
+                    std::cerr << "Host" << power_control::node << ": " <<  "Unable to read NMI source\n";
                     return;
                 }
             });
@@ -1928,7 +1923,7 @@ static void setNmiSource()
         [](boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "failed to set NMI source\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "failed to set NMI source\n";
             }
         },
         "xyz.openbmc_project.Settings",
@@ -1951,7 +1946,7 @@ static void nmiButtonHandler()
         nmiButtonIface->set_property("ButtonPressed", true);
         if (nmiButtonMasked)
         {
-            std::cerr << "NMI button press masked\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "NMI button press masked\n";
         }
         else
         {
@@ -1966,7 +1961,7 @@ static void nmiButtonHandler()
                               [](const boost::system::error_code ec) {
                                   if (ec)
                                   {
-                                      std::cerr << "NMI button handler error: "
+                                      std::cerr << "Host" << power_control::node << ": " <<  "NMI button handler error: "
                                                 << ec.message() << "\n";
                                       return;
                                   }
@@ -1990,7 +1985,7 @@ static void idButtonHandler()
                              [](const boost::system::error_code& ec) {
                                  if (ec)
                                  {
-                                     std::cerr << "ID button handler error: "
+                                     std::cerr << "Host" << power_control::node << ": " <<  "ID button handler error: "
                                                << ec.message() << "\n";
                                      return;
                                  }
@@ -2019,7 +2014,7 @@ static void postCompleteHandler()
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "POST complete handler error: " << ec.message()
+                std::cerr << "Host" << power_control::node << ": " <<  "POST complete handler error: " << ec.message()
                           << "\n";
                 return;
             }
@@ -2034,7 +2029,7 @@ static int loadConfigValues()
     std::ifstream configFile(configFilePath.c_str());
     if (!configFile.is_open())
     {
-        std::cerr << "loadConfigValues : Cannot open config path\n ";
+        std::cerr << "Host" << power_control::node << ": " <<  "loadConfigValues : Cannot open config path\n ";
         return -1;
     }
     try
@@ -2043,19 +2038,15 @@ static int loadConfigValues()
         pwrOk = data["power-ok"];
         pwrOut = data["power-out"];
 		resetOut =data["reset-out"];
-		pwrButton = data["power-button"];
-		rstButton = data["reset-button"];
-		postComplete = data["post-complete"];
-				
     }
     catch (nlohmann::json::exception &e)
     {
-        std::cerr << "loadConfigValues: Error parsing config file\n ";
+        std::cerr << "Host" << power_control::node << ": " <<  "loadConfigValues: Error parsing config file\n ";
         return -1;
     }
     catch (std::out_of_range &e)
     {
-        std::cerr << "loadConfigValues : Error invalid type\n ";
+        std::cerr << "Host" << power_control::node << ": " <<  "loadConfigValues : Error invalid type\n ";
         return -1;
     }
     return 0;
@@ -2065,19 +2056,19 @@ static int loadConfigValues()
 
 int main(int argc, char* argv[])
 {
-    std::cerr << "Start Chassis power control service ...\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Start Chassis power control service ...\n";
 	power_control::node = argv[1];
-    std::cerr << "Node :"<<power_control::node <<"\n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Node :"<<power_control::node <<"\n";
 
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
     if(power_control::loadConfigValues()  == -1)
     {
-	    std::cerr << "Error in Parsing...\n";
+	    std::cerr << "Host" << power_control::node << ": " <<  "Error in Parsing...\n";
     }
 
-    std::cerr << "Power Out :" <<power_control::pwrOut << " and  : "<< power_control::pwrOk <<" \n";
+    std::cerr << "Host" << power_control::node << ": " <<  "Power Out :" <<power_control::pwrOut << " and  : "<< power_control::pwrOk <<" \n";
 
     // Request all the dbus names
     std::string hostName = "xyz.openbmc_project.State.Host" + power_control::node;
@@ -2102,73 +2093,76 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-	if(power_control::sioPwrGood.empty() && power_control::sioOnCtrl.empty() && power_control::sioS5.empty())
-	{
+    if(power_control::sioPwrGood.empty() && power_control::sioOnCtrl.empty() && power_control::sioS5.empty())
+    {
 		power_control::sioDisabled = true;
+    }
+    else
+    { 	
+
+		// Request SIO_POWER_GOOD GPIO events
+		if (!power_control::requestGPIOEvents(
+				"SIO_POWER_GOOD", power_control::sioPowerGoodHandler,
+				power_control::sioPowerGoodLine, power_control::sioPowerGoodEvent))
+		{
+			return -1;
+		}
+
+		// Request SIO_ONCONTROL GPIO events
+		if (!power_control::requestGPIOEvents(
+				"SIO_ONCONTROL", power_control::sioOnControlHandler,
+				power_control::sioOnControlLine, power_control::sioOnControlEvent))
+		{
+			return -1;
+		}
+
+		// Request SIO_S5 GPIO events
+		if (!power_control::requestGPIOEvents("SIO_S5", power_control::sioS5Handler,
+											  power_control::sioS5Line,
+											  power_control::sioS5Event))
+		{
+			return -1;
+		}
+
 	}
-	else
+
+	if(std::stoi(power_control::node) == 1)
 	{
+		// Request POWER_BUTTON GPIO events
+		if (!power_control::requestGPIOEvents(
+				"POWER_BUTTON", power_control::powerButtonHandler,
+				power_control::powerButtonLine, power_control::powerButtonEvent))
+		{
+			return -1;
+		}
 
-    // Request SIO_POWER_GOOD GPIO events
-    if (!power_control::requestGPIOEvents(
-            "SIO_POWER_GOOD", power_control::sioPowerGoodHandler,
-            power_control::sioPowerGoodLine, power_control::sioPowerGoodEvent))
-    {
-        return -1;
-    }
+		// Request RESET_BUTTON GPIO events
+		if (!power_control::requestGPIOEvents(
+				"RESET_BUTTON", power_control::resetButtonHandler,
+				power_control::resetButtonLine, power_control::resetButtonEvent))
+		{
+			return -1;
+		}
 
-    // Request SIO_ONCONTROL GPIO events
-    if (!power_control::requestGPIOEvents(
-            "SIO_ONCONTROL", power_control::sioOnControlHandler,
-            power_control::sioOnControlLine, power_control::sioOnControlEvent))
-    {
-        return -1;
-    }
+		// Request NMI_BUTTON GPIO events
+		power_control::requestGPIOEvents(
+			"NMI_BUTTON", power_control::nmiButtonHandler,
+			power_control::nmiButtonLine, power_control::nmiButtonEvent);
 
-    // Request SIO_S5 GPIO events
-    if (!power_control::requestGPIOEvents("SIO_S5", power_control::sioS5Handler,
-                                          power_control::sioS5Line,
-                                          power_control::sioS5Event))
-    {
-        return -1;
-    }
+		// Request ID_BUTTON GPIO events
+		power_control::requestGPIOEvents(
+			"ID_BUTTON", power_control::idButtonHandler,
+			power_control::idButtonLine, power_control::idButtonEvent);
 
+		// Request POST_COMPLETE GPIO events
+		if (!power_control::requestGPIOEvents(
+				"POST_COMPLETE", power_control::postCompleteHandler,
+				power_control::postCompleteLine, power_control::postCompleteEvent))
+		{
+			return -1;
+		}
 	}
-
-    // Request POWER_BUTTON GPIO events
-    if (!power_control::requestGPIOEvents(
-            "POWER_BUTTON", power_control::powerButtonHandler,
-            power_control::powerButtonLine, power_control::powerButtonEvent))
-    {
-        return -1;
-    }
-
-    // Request RESET_BUTTON GPIO events
-    if (!power_control::requestGPIOEvents(
-            "RESET_BUTTON", power_control::resetButtonHandler,
-            power_control::resetButtonLine, power_control::resetButtonEvent))
-    {
-        return -1;
-    }
-
-    // Request NMI_BUTTON GPIO events
-    power_control::requestGPIOEvents(
-        "NMI_BUTTON", power_control::nmiButtonHandler,
-        power_control::nmiButtonLine, power_control::nmiButtonEvent);
-
-    // Request ID_BUTTON GPIO events
-    power_control::requestGPIOEvents(
-        "ID_BUTTON", power_control::idButtonHandler,
-        power_control::idButtonLine, power_control::idButtonEvent);
-
-    // Request POST_COMPLETE GPIO events
-    if (!power_control::requestGPIOEvents(
-            "POST_COMPLETE", power_control::postCompleteHandler,
-            power_control::postCompleteLine, power_control::postCompleteEvent))
-    {
-        return -1;
-    }
-    // initialize NMI_OUT GPIO.
+		// initialize NMI_OUT GPIO.
     power_control::setGPIOOutput(power_control::nmiOutName, 0,
                                  power_control::nmiOutLine);
 
@@ -2204,10 +2198,10 @@ int main(int argc, char* argv[])
     // Check if we need to start the Power Restore policy
     power_control::powerRestorePolicyCheck();
 
-//    if (power_control::nmiOutLine)
-//        power_control::nmiSourcePropertyMonitor();
+    if (power_control::nmiOutLine)
+        power_control::nmiSourcePropertyMonitor();
 
-    std::cerr << "Initializing power state. ";
+    std::cerr << "Host" << power_control::node << ": " <<  "Initializing power state. ";
     power_control::logStateTransition(power_control::powerState);
 
     // Power Control Service
@@ -2255,7 +2249,7 @@ int main(int argc, char* argv[])
             }
             else
             {
-                std::cerr << "Unrecognized host state transition request.\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "Unrecognized host state transition request.\n";
                 throw std::invalid_argument("Unrecognized Transition Request");
                 return 0;
             }
@@ -2300,7 +2294,7 @@ int main(int argc, char* argv[])
             }
             else
             {
-                std::cerr << "Unrecognized chassis state transition request.\n";
+                std::cerr << "Host" << power_control::node << ": " <<  "Unrecognized chassis state transition request.\n";
                 throw std::invalid_argument("Unrecognized Transition Request");
                 return 0;
             }
@@ -2316,163 +2310,165 @@ int main(int argc, char* argv[])
     power_control::chassisIface->initialize();
 
   
-	  // Buttons Service
-    sdbusplus::asio::object_server buttonsServer =
-        sdbusplus::asio::object_server(power_control::conn);
+	if(std::stoi(power_control::node) == 1)
+	{
+		// Buttons Service
+		sdbusplus::asio::object_server buttonsServer =
+			sdbusplus::asio::object_server(power_control::conn);
 
-    // Power Button Interface
-    power_control::powerButtonIface = buttonsServer.add_interface(
-        "/xyz/openbmc_project/chassis/buttons/power",
-        buttonName.c_str());
+		// Power Button Interface
+		power_control::powerButtonIface = buttonsServer.add_interface(
+			"/xyz/openbmc_project/chassis/buttons/power",
+			buttonName.c_str());
 
-    power_control::powerButtonIface->register_property(
-        "ButtonMasked", false, [](const bool requested, bool& current) {
-            if (requested)
-            {
-                if (power_control::powerButtonMask)
-                {
-                    return 1;
-                }
-                if (!power_control::setGPIOOutput(
-                        power_control::pwrOut, 1,
-                        power_control::powerButtonMask))
-                {
-                    throw std::runtime_error("Failed to request GPIO");
-                    return 0;
-                }
-                std::cerr << "Power Button Masked.\n";
-            }
-            else
-            {
-                if (!power_control::powerButtonMask)
-                {
-                    return 1;
-                }
-                std::cerr << "Power Button Un-masked\n";
-                power_control::powerButtonMask.reset();
-            }
-            // Update the mask setting
-            current = requested;
-            return 1;
-        });
+		power_control::powerButtonIface->register_property(
+			"ButtonMasked", false, [](const bool requested, bool& current) {
+				if (requested)
+				{
+					if (power_control::powerButtonMask)
+					{
+						return 1;
+					}
+					if (!power_control::setGPIOOutput(
+							power_control::pwrOut, 1,
+							power_control::powerButtonMask))
+					{
+						throw std::runtime_error("Failed to request GPIO");
+						return 0;
+					}
+					std::cerr << "Host" << power_control::node << ": " <<  "Power Button Masked.\n";
+				}
+				else
+				{
+					if (!power_control::powerButtonMask)
+					{
+						return 1;
+					}
+					std::cerr << "Host" << power_control::node << ": " <<  "Power Button Un-masked\n";
+					power_control::powerButtonMask.reset();
+				}
+				// Update the mask setting
+				current = requested;
+				return 1;
+			});
 
-    // Check power button state
-    bool powerButtonPressed = power_control::powerButtonLine.get_value() == 0;
-    power_control::powerButtonIface->register_property("ButtonPressed",
-                                                       powerButtonPressed);
+		// Check power button state
+		bool powerButtonPressed = power_control::powerButtonLine.get_value() == 0;
+		power_control::powerButtonIface->register_property("ButtonPressed",
+														   powerButtonPressed);
 
-    power_control::powerButtonIface->initialize();
+		power_control::powerButtonIface->initialize();
 
-    // Reset Button Interface
-    power_control::resetButtonIface = buttonsServer.add_interface(
-        "/xyz/openbmc_project/chassis/buttons/reset",
-        buttonName.c_str());
+		// Reset Button Interface
+		power_control::resetButtonIface = buttonsServer.add_interface(
+			"/xyz/openbmc_project/chassis/buttons/reset",
+			buttonName.c_str());
 
-    power_control::resetButtonIface->register_property(
-        "ButtonMasked", false, [](const bool requested, bool& current) {
-            if (requested)
-            {
-                if (power_control::resetButtonMask)
-                {
-                    return 1;
-                }
-                if (!power_control::setGPIOOutput(
-                        power_control::resetOut, 1,
-                        power_control::resetButtonMask))
-                {
-                    throw std::runtime_error("Failed to request GPIO");
-                    return 0;
-                }
-                std::cerr << "Reset Button Masked.\n";
-            }
-            else
-            {
-                if (!power_control::resetButtonMask)
-                {
-                    return 1;
-                }
-                std::cerr << "Reset Button Un-masked\n";
-                power_control::resetButtonMask.reset();
-            }
-            // Update the mask setting
-            current = requested;
-            return 1;
-        });
+		power_control::resetButtonIface->register_property(
+			"ButtonMasked", false, [](const bool requested, bool& current) {
+				if (requested)
+				{
+					if (power_control::resetButtonMask)
+					{
+						return 1;
+					}
+					if (!power_control::setGPIOOutput(
+							power_control::resetOut, 1,
+							power_control::resetButtonMask))
+					{
+						throw std::runtime_error("Failed to request GPIO");
+						return 0;
+					}
+					std::cerr << "Host" << power_control::node << ": " <<  "Reset Button Masked.\n";
+				}
+				else
+				{
+					if (!power_control::resetButtonMask)
+					{
+						return 1;
+					}
+					std::cerr << "Host" << power_control::node << ": " <<  "Reset Button Un-masked\n";
+					power_control::resetButtonMask.reset();
+				}
+				// Update the mask setting
+				current = requested;
+				return 1;
+			});
 
-    // Check reset button state
-    bool resetButtonPressed = power_control::resetButtonLine.get_value() == 0;
-    power_control::resetButtonIface->register_property("ButtonPressed",
-                                                       resetButtonPressed);
+		// Check reset button state
+		bool resetButtonPressed = power_control::resetButtonLine.get_value() == 0;
+		power_control::resetButtonIface->register_property("ButtonPressed",
+														   resetButtonPressed);
 
-    power_control::resetButtonIface->initialize();
+		power_control::resetButtonIface->initialize();
 
-    if (power_control::nmiButtonLine)
-    {
-        // NMI Button Interface
-        power_control::nmiButtonIface = buttonsServer.add_interface(
-            "/xyz/openbmc_project/chassis/buttons/nmi",
-            "xyz.openbmc_project.Chassis.Buttons");
+		if (power_control::nmiButtonLine)
+		{
+			// NMI Button Interface
+			power_control::nmiButtonIface = buttonsServer.add_interface(
+				"/xyz/openbmc_project/chassis/buttons/nmi",
+				"xyz.openbmc_project.Chassis.Buttons");
 
-        power_control::nmiButtonIface->register_property(
-            "ButtonMasked", false, [](const bool requested, bool& current) {
-                if (power_control::nmiButtonMasked == requested)
-                {
-                    // NMI button mask is already set as requested, so no change
-                    return 1;
-                }
-                if (requested)
-                {
-                    std::cerr << "NMI Button Masked.\n";
-                    power_control::nmiButtonMasked = true;
-                }
-                else
-                {
-                    std::cerr << "NMI Button Un-masked.\n";
-                    power_control::nmiButtonMasked = false;
-                }
-                // Update the mask setting
-                current = power_control::nmiButtonMasked;
-                return 1;
-            });
+			power_control::nmiButtonIface->register_property(
+				"ButtonMasked", false, [](const bool requested, bool& current) {
+					if (power_control::nmiButtonMasked == requested)
+					{
+						// NMI button mask is already set as requested, so no change
+						return 1;
+					}
+					if (requested)
+					{
+						std::cerr << "Host" << power_control::node << ": " <<  "NMI Button Masked.\n";
+						power_control::nmiButtonMasked = true;
+					}
+					else
+					{
+						std::cerr << "Host" << power_control::node << ": " <<  "NMI Button Un-masked.\n";
+						power_control::nmiButtonMasked = false;
+					}
+					// Update the mask setting
+					current = power_control::nmiButtonMasked;
+					return 1;
+				});
 
-        // Check NMI button state
-        bool nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
-        power_control::nmiButtonIface->register_property("ButtonPressed",
-                                                         nmiButtonPressed);
+			// Check NMI button state
+			bool nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
+			power_control::nmiButtonIface->register_property("ButtonPressed",
+															 nmiButtonPressed);
 
-        power_control::nmiButtonIface->initialize();
-    }
+			power_control::nmiButtonIface->initialize();
+		}
 
-    if (power_control::nmiOutLine)
-    {
-        // NMI out Service
-        sdbusplus::asio::object_server nmiOutServer =
-            sdbusplus::asio::object_server(power_control::conn);
+		if (power_control::nmiOutLine)
+		{
+			// NMI out Service
+			sdbusplus::asio::object_server nmiOutServer =
+				sdbusplus::asio::object_server(power_control::conn);
 
-        // NMI out Interface
-        power_control::nmiOutIface =
-            nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
-                                       nmiName.c_str());
-        power_control::nmiOutIface->register_method("NMI",
-                                                    power_control::nmiReset);
-        power_control::nmiOutIface->initialize();
-    }
+			// NMI out Interface
+			power_control::nmiOutIface =
+				nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
+										   nmiName.c_str());
+			power_control::nmiOutIface->register_method("NMI",
+														power_control::nmiReset);
+			power_control::nmiOutIface->initialize();
+		}
 
-    if (power_control::idButtonLine)
-    {
-        // ID Button Interface
-        power_control::idButtonIface = buttonsServer.add_interface(
-            "/xyz/openbmc_project/chassis/buttons/id",
-            "xyz.openbmc_project.Chassis.Buttons");
+		if (power_control::idButtonLine)
+		{
+			// ID Button Interface
+			power_control::idButtonIface = buttonsServer.add_interface(
+				"/xyz/openbmc_project/chassis/buttons/id",
+				"xyz.openbmc_project.Chassis.Buttons");
 
-        // Check ID button state
-        bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
-        power_control::idButtonIface->register_property("ButtonPressed",
-                                                        idButtonPressed);
+			// Check ID button state
+			bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
+			power_control::idButtonIface->register_property("ButtonPressed",
+															idButtonPressed);
 
-        power_control::idButtonIface->initialize();
-    }
-
+			power_control::idButtonIface->initialize();
+		}
+	
     // OS State Service
     sdbusplus::asio::object_server osServer =
         sdbusplus::asio::object_server(power_control::conn);
@@ -2524,11 +2520,11 @@ int main(int argc, char* argv[])
                 return 0;
             }
 
-            std::cerr << "RestartCause requested: " << requested << "\n";
+            std::cerr << "Host" << power_control::node << ": " <<  "RestartCause requested: " << requested << "\n";
             resp = requested;
             return 1;
         });
-
+	}
     power_control::restartCauseIface->initialize();
     power_control::currentHostStateMonitor();
 
