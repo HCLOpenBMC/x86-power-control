@@ -2216,7 +2216,7 @@ int main(int argc, char* argv[])
 
     // Power Control Interface
     power_control::hostIface = hostServer.add_interface(
-        "/xyz/openbmc_project/state/host0", "xyz.openbmc_project.State.Host");
+        "/xyz/openbmc_project/state/host0", hostName.c_str());
 
     power_control::hostIface->register_property(
         "RequestedHostTransition",
@@ -2275,7 +2275,7 @@ int main(int argc, char* argv[])
     // Chassis Control Interface
     power_control::chassisIface =
         chassisServer.add_interface("/xyz/openbmc_project/state/chassis0",
-                                    "xyz.openbmc_project.State.Chassis");
+                                    chassisName.c_str());
 
     power_control::chassisIface->register_property(
         "RequestedPowerTransition",
@@ -2315,7 +2315,7 @@ int main(int argc, char* argv[])
 
     power_control::chassisIface->initialize();
 
-  #if 0
+  
 	  // Buttons Service
     sdbusplus::asio::object_server buttonsServer =
         sdbusplus::asio::object_server(power_control::conn);
@@ -2323,7 +2323,7 @@ int main(int argc, char* argv[])
     // Power Button Interface
     power_control::powerButtonIface = buttonsServer.add_interface(
         "/xyz/openbmc_project/chassis/buttons/power",
-        "xyz.openbmc_project.Chassis.Buttons");
+        buttonName.c_str());
 
     power_control::powerButtonIface->register_property(
         "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -2366,7 +2366,7 @@ int main(int argc, char* argv[])
     // Reset Button Interface
     power_control::resetButtonIface = buttonsServer.add_interface(
         "/xyz/openbmc_project/chassis/buttons/reset",
-        "xyz.openbmc_project.Chassis.Buttons");
+        buttonName.c_str());
 
     power_control::resetButtonIface->register_property(
         "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -2452,7 +2452,7 @@ int main(int argc, char* argv[])
         // NMI out Interface
         power_control::nmiOutIface =
             nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
-                                       "xyz.openbmc_project.Control.Host.NMI");
+                                       nmiName.c_str());
         power_control::nmiOutIface->register_method("NMI",
                                                     power_control::nmiReset);
         power_control::nmiOutIface->initialize();
@@ -2530,7 +2530,6 @@ int main(int argc, char* argv[])
         });
 
     power_control::restartCauseIface->initialize();
-#endif
     power_control::currentHostStateMonitor();
 
     power_control::io.run();
