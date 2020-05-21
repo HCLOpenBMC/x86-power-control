@@ -1291,6 +1291,7 @@ static void pohCounterTimerStart()
 
 static void currentHostStateMonitor()
 {
+	int host = std::stoi(power_control::node);
     if (getHostState(powerState) ==
         "xyz.openbmc_project.State.Host.HostState.Running")
     {
@@ -1304,13 +1305,12 @@ static void currentHostStateMonitor()
         // Set the restart cause set for this restart
         setRestartCause();
     }
-
     static auto match = sdbusplus::bus::match::match(
         *conn,
         "type='signal',member='PropertiesChanged', "
         "interface='org.freedesktop.DBus.Properties', "
         "arg0namespace='xyz.openbmc_project.State.Host'",
-        [](sdbusplus::message::message& message) {
+        [host](sdbusplus::message::message& message) {
             std::string intfName;
             std::map<std::string, std::variant<std::string>> properties;
 
@@ -1343,14 +1343,17 @@ static void currentHostStateMonitor()
             else
             {
                 pohCounterTimer.cancel();
-                // POST_COMPLETE GPIO event is not working in some platforms
-                // when power state is changed to OFF. This resulted in
-                // 'OperatingSystemState' to stay at 'Standby', even though
-                // system is OFF. Set 'OperatingSystemState' to 'Inactive'
-                // if HostState is trurned to OFF.
-                osIface->set_property("OperatingSystemState",
-                                      std::string("Inactive"));
-
+            
+				if(host == 1)
+				{
+					// POST_COMPLETE GPIO event is not working in some platforms
+					// when power state is changed to OFF. This resulted in
+					// 'OperatingSystemState' to stay at 'Standby', even though
+					// system is OFF. Set 'OperatingSystemState' to 'Inactive'
+					// if HostState is trurned to OFF.
+					osIface->set_property("OperatingSystemState",
+										  std::string("Inactive"));
+				}
                 // Set the restart cause set for this restart
                 setRestartCause();
                 resetACBootProperty();
@@ -2153,7 +2156,7 @@ int main(int argc, char* argv[])
 		power_control::requestGPIOEvents(
 			"ID_BUTTON", power_control::idButtonHandler,
 			power_control::idButtonLine, power_control::idButtonEvent);
-
+	
 		// Request POST_COMPLETE GPIO events
 		if (!power_control::requestGPIOEvents(
 				"POST_COMPLETE", power_control::postCompleteHandler,
@@ -2161,7 +2164,7 @@ int main(int argc, char* argv[])
 		{
 			return -1;
 		}
-	}
+	}	
 		// initialize NMI_OUT GPIO.
     power_control::setGPIOOutput(power_control::nmiOutName, 0,
                                  power_control::nmiOutLine);
@@ -2459,7 +2462,7 @@ int main(int argc, char* argv[])
 			// ID Button Interface
 			power_control::idButtonIface = buttonsServer.add_interface(
 				"/xyz/openbmc_project/chassis/buttons/id",
-				"xyz.openbmc_project.Chassis.Buttons");
+				buttonName.c_str());
 
 			// Check ID button state
 			bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
@@ -2476,7 +2479,7 @@ int main(int argc, char* argv[])
     // OS State Interface
     power_control::osIface = osServer.add_interface(
         "/xyz/openbmc_project/state/os",
-        "xyz.openbmc_project.State.OperatingSystem.Status");
+        osName.c_str());
 
     // Get the initial OS state based on POST complete
     //      0: Asserted, OS state is "Standby" (ready to boot)
@@ -2489,7 +2492,7 @@ int main(int argc, char* argv[])
                                               std::string(osState));
 
     power_control::osIface->initialize();
-
+	}
     // Restart Cause Service
     sdbusplus::asio::object_server restartCauseServer =
         sdbusplus::asio::object_server(power_control::conn);
@@ -2497,7 +2500,7 @@ int main(int argc, char* argv[])
     // Restart Cause Interface
     power_control::restartCauseIface = restartCauseServer.add_interface(
         "/xyz/openbmc_project/control/host0/restart_cause",
-        "xyz.openbmc_project.Control.Host.RestartCause");
+        rstCauseName.c_str());
 
     power_control::restartCauseIface->register_property(
         "RestartCause",
@@ -2524,11 +2527,11 @@ int main(int argc, char* argv[])
             resp = requested;
             return 1;
         });
-	}
+	
     power_control::restartCauseIface->initialize();
     power_control::currentHostStateMonitor();
-
-    power_control::io.run();
+    
+	power_control::io.run();
 
     return 0;
 }
