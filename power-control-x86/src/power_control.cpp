@@ -2066,10 +2066,23 @@ int main(int argc, char* argv[])
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
-    if(power_control::loadConfigValues()  == -1)
-    {
-        std::cerr << "Host" << power_control::node << ": " <<  "Error in Parsing...\n";
-    }
+    if(std::stoi(power_control::node) == 0)
+	{
+		power_control::pwrOut = "POWER_OUT";
+		power_control::resetOut = "RESET_OUT";
+		power_control::nmiOut = "NMI_OUT";
+		power_control::pwrOk = "PS_PWROK";
+		power_control::sioPwrGood = "SIO_POWER_GOOD";
+		power_control::sioOnCtrl = "SIO_ONCONTROL";
+		power_control::sioS5 = "SIO_S5";
+	}
+	else
+	{
+		if(power_control::loadConfigValues()  == -1)
+		{
+			std::cerr << "Host" << power_control::node << ": " <<  "Error in Parsing...\n";
+		}
+	}
 
     // Request all the dbus names
     std::string hostName = "xyz.openbmc_project.State.Host" + power_control::node;
@@ -2102,7 +2115,7 @@ int main(int argc, char* argv[])
     {
         // Request SIO_POWER_GOOD GPIO events
         if (!power_control::requestGPIOEvents(
-                        "SIO_POWER_GOOD", power_control::sioPowerGoodHandler,
+                        power_control::sioPwrGood, power_control::sioPowerGoodHandler,
                         power_control::sioPowerGoodLine, power_control::sioPowerGoodEvent))
         {
             return -1;
@@ -2110,14 +2123,14 @@ int main(int argc, char* argv[])
 
         // Request SIO_ONCONTROL GPIO events
         if (!power_control::requestGPIOEvents(
-                        "SIO_ONCONTROL", power_control::sioOnControlHandler,
+                        power_control::sioOnCtrl, power_control::sioOnControlHandler,
                         power_control::sioOnControlLine, power_control::sioOnControlEvent))
         {
             return -1;
         }
 
         // Request SIO_S5 GPIO events
-        if (!power_control::requestGPIOEvents("SIO_S5", power_control::sioS5Handler,
+        if (!power_control::requestGPIOEvents(power_control::sioS5, power_control::sioS5Handler,
                         power_control::sioS5Line,
                         power_control::sioS5Event))
         {
@@ -2126,7 +2139,7 @@ int main(int argc, char* argv[])
 
     }
 
-    if(std::stoi(power_control::node) == 1)
+    if(std::stoi(power_control::node) == 0)
     {
         // Request POWER_BUTTON GPIO events
         if (!power_control::requestGPIOEvents(
@@ -2310,7 +2323,7 @@ int main(int argc, char* argv[])
     power_control::chassisIface->initialize();
 
   
-    if(std::stoi(power_control::node) == 1)
+    if(std::stoi(power_control::node) == 0)
     {
         // Buttons Service
         sdbusplus::asio::object_server buttonsServer =

@@ -4,7 +4,7 @@ Description=Intel Power Control
 [Service]
 Restart=always
 RestartSec=3
-ExecStart=/usr/bin/power-control
+ExecStart=/usr/bin/power-control 0
 Type=dbus
 BusName=xyz.openbmc_project.State.Host
 
