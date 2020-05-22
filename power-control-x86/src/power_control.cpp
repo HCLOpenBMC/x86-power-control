@@ -1603,9 +1603,18 @@ static void powerStateCycleOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
+		{
             powerCycleTimer.cancel();
-            setPowerState(PowerState::waitForSIOPowerGood);
+			if(power_control::sioDisabled)
+            {   
+                setPowerState(PowerState::on);
+            }
+            else
+            {   
+                setPowerState(PowerState::waitForSIOPowerGood);
+            }
             break;
+		}
         case Event::sioS5DeAssert:
             powerCycleTimer.cancel();
             setPowerState(PowerState::waitForPSPowerOK);
