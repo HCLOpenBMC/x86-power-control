@@ -196,7 +196,7 @@ static std::string getPowerStateName(PowerState state)
 }
 static void logStateTransition(const PowerState state)
 {
-    std::string logMsg = "Moving to \"" + getPowerStateName(state) + "\" state";
+    std::string logMsg = "Host" + power_control::node + ": " + "Moving to \"" + getPowerStateName(state) + "\" state";
     phosphor::logging::log<phosphor::logging::level::INFO>(
         logMsg.c_str(),
         phosphor::logging::entry("STATE=%s", getPowerStateName(state).c_str()));
@@ -301,6 +301,8 @@ static std::string getEventName(Event event)
 static void logEvent(const std::string_view stateHandler, const Event event)
 {
     std::string logMsg{stateHandler};
+	std::string host = "Host" + power_control::node + ": ";
+	logMsg.insert(0,host);
     logMsg += ": " + getEventName(event) + " event received";
     phosphor::logging::log<phosphor::logging::level::INFO>(
         logMsg.c_str(),
