@@ -1347,7 +1347,7 @@ static void currentHostStateMonitor()
             {
                 pohCounterTimer.cancel();
             
-                if(host == 1)
+                if(host == 0)
                 {
                     // POST_COMPLETE GPIO event is not working in some platforms
                     // when power state is changed to OFF. This resulted in
@@ -2139,24 +2139,24 @@ int main(int argc, char* argv[])
     {
         // Request SIO_POWER_GOOD GPIO events
         if (!power_control::requestGPIOEvents(
-                        power_control::sioPwrGood, power_control::sioPowerGoodHandler,
-                        power_control::sioPowerGoodLine, power_control::sioPowerGoodEvent))
+                power_control::sioPwrGood, power_control::sioPowerGoodHandler,
+                power_control::sioPowerGoodLine, power_control::sioPowerGoodEvent))
         {
             return -1;
         }
 
         // Request SIO_ONCONTROL GPIO events
         if (!power_control::requestGPIOEvents(
-                        power_control::sioOnCtrl, power_control::sioOnControlHandler,
-                        power_control::sioOnControlLine, power_control::sioOnControlEvent))
+                power_control::sioOnCtrl, power_control::sioOnControlHandler,
+                power_control::sioOnControlLine, power_control::sioOnControlEvent))
         {
             return -1;
         }
 
         // Request SIO_S5 GPIO events
         if (!power_control::requestGPIOEvents(power_control::sioS5, power_control::sioS5Handler,
-                        power_control::sioS5Line,
-                        power_control::sioS5Event))
+                                              power_control::sioS5Line,
+                                              power_control::sioS5Event))
         {
             return -1;
         }
@@ -2167,34 +2167,34 @@ int main(int argc, char* argv[])
     {
         // Request POWER_BUTTON GPIO events
         if (!power_control::requestGPIOEvents(
-                        "POWER_BUTTON", power_control::powerButtonHandler,
-                        power_control::powerButtonLine, power_control::powerButtonEvent))
+                "POWER_BUTTON", power_control::powerButtonHandler,
+                power_control::powerButtonLine, power_control::powerButtonEvent))
         {
             return -1;
         }
 
         // Request RESET_BUTTON GPIO events
         if (!power_control::requestGPIOEvents(
-                        "RESET_BUTTON", power_control::resetButtonHandler,
-                        power_control::resetButtonLine, power_control::resetButtonEvent))
+                "RESET_BUTTON", power_control::resetButtonHandler,
+                power_control::resetButtonLine, power_control::resetButtonEvent))
         {
             return -1;
         }
 
         // Request NMI_BUTTON GPIO events
         power_control::requestGPIOEvents(
-                    "NMI_BUTTON", power_control::nmiButtonHandler,
-                    power_control::nmiButtonLine, power_control::nmiButtonEvent);
+            "NMI_BUTTON", power_control::nmiButtonHandler,
+            power_control::nmiButtonLine, power_control::nmiButtonEvent);
 
         // Request ID_BUTTON GPIO events
         power_control::requestGPIOEvents(
-                    "ID_BUTTON", power_control::idButtonHandler,
-                    power_control::idButtonLine, power_control::idButtonEvent);
+            "ID_BUTTON", power_control::idButtonHandler,
+            power_control::idButtonLine, power_control::idButtonEvent);
 
         // Request POST_COMPLETE GPIO events
         if (!power_control::requestGPIOEvents(
-                    "POST_COMPLETE", power_control::postCompleteHandler,
-                    power_control::postCompleteLine, power_control::postCompleteEvent))
+                "POST_COMPLETE", power_control::postCompleteHandler,
+                power_control::postCompleteLine, power_control::postCompleteEvent))
         {
             return -1;
         }
@@ -2351,7 +2351,7 @@ int main(int argc, char* argv[])
     {
         // Buttons Service
         sdbusplus::asio::object_server buttonsServer =
-                sdbusplus::asio::object_server(power_control::conn);
+            sdbusplus::asio::object_server(power_control::conn);
 
         // Power Button Interface
         power_control::powerButtonIface = buttonsServer.add_interface(
