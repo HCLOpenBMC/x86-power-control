@@ -56,8 +56,16 @@ static std::string nmiOut;
 static std::string sioPwrGood;
 static std::string sioOnCtrl;
 static std::string sioS5;
-std::string node;
+std::string node = "0";
 static bool sioDisabled = true;
+static bool isDefaultSettings = false;
+
+static std::string hostName = "xyz.openbmc_project.State.Host";
+static std::string chassisName = "xyz.openbmc_project.State.Chassis";
+static std::string osName = "xyz.openbmc_project.State.OperatingSystem";
+static std::string buttonName = "xyz.openbmc_project.Chassis.Buttons";
+static std::string nmiName = "xyz.openbmc_project.Control.Host.NMI";
+static std::string rstCauseName = "xyz.openbmc_project.Control.Host.RestartCause";
 
 const static constexpr int powerPulseTimeMs = 200;
 const static constexpr int forceOffPulseTimeMs = 15000;
@@ -2084,44 +2092,47 @@ static int loadConfigValues()
 
 int main(int argc, char* argv[])
 {
-    power_control::node = argv[1]; 
+    if(argc > 1)
+	{
+		power_control::node = argv[1]; 
+	}
     std::cerr << "Host" << power_control::node << ": " <<  "Start Chassis power control service ...\n";
 
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
-    if(std::stoi(power_control::node) == 0)
-	{
-		power_control::pwrOut = "POWER_OUT";
-		power_control::resetOut = "RESET_OUT";
-		power_control::nmiOut = "NMI_OUT";
-		power_control::pwrOk = "PS_PWROK";
-		power_control::sioPwrGood = "SIO_POWER_GOOD";
-		power_control::sioOnCtrl = "SIO_ONCONTROL";
-		power_control::sioS5 = "SIO_S5";
-	}
-	else
+	if(std::stoi(power_control::node) > 0)
 	{
 		if(power_control::loadConfigValues()  == -1)
 		{
 			std::cerr << "Host" << power_control::node << ": " <<  "Error in Parsing...\n";
 		}
+		power_control::hostName = "xyz.openbmc_project.State.Host" + power_control::node;
+	    power_control::chassisName = "xyz.openbmc_project.State.Chassis" + power_control::node;
+	    power_control::osName = "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
+	    power_control::buttonName = "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
+	    power_control::nmiName = "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
+	    power_control::rstCauseName = "xyz.openbmc_project.Control.Host.RestartCause" + power_control::node;
 	}
-
+	else //load default values
+	{
+		power_control::isDefaultSettings = true;
+		power_control::pwrOut = "POWER_OUT";
+        power_control::resetOut = "RESET_OUT";
+        power_control::nmiOut = "NMI_OUT";
+        power_control::pwrOk = "PS_PWROK";
+        power_control::sioPwrGood = "SIO_POWER_GOOD";
+        power_control::sioOnCtrl = "SIO_ONCONTROL";
+        power_control::sioS5 = "SIO_S5";
+	}
+	
     // Request all the dbus names
-    std::string hostName = "xyz.openbmc_project.State.Host" + power_control::node;
-    std::string chassisName = "xyz.openbmc_project.State.Chassis" + power_control::node;
-    std::string osName = "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
-    std::string buttonName = "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
-    std::string  nmiName = "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
-    std::string rstCauseName = "xyz.openbmc_project.Control.Host.RestartCause" + power_control::node;
-
-    power_control::conn->request_name(hostName.c_str());
-    power_control::conn->request_name(chassisName.c_str());
-    power_control::conn->request_name(osName.c_str());
-    power_control::conn->request_name(buttonName.c_str());
-    power_control::conn->request_name(nmiName.c_str());
-    power_control::conn->request_name(rstCauseName.c_str());
+    power_control::conn->request_name(power_control::hostName.c_str());
+    power_control::conn->request_name(power_control::chassisName.c_str());
+    power_control::conn->request_name(power_control::osName.c_str());
+    power_control::conn->request_name(power_control::buttonName.c_str());
+    power_control::conn->request_name(power_control::nmiName.c_str());
+    power_control::conn->request_name(power_control::rstCauseName.c_str());
 
     // Request PS_PWROK GPIO events
     if (!power_control::requestGPIOEvents(
@@ -2163,7 +2174,7 @@ int main(int argc, char* argv[])
 
     }
 
-    if(std::stoi(power_control::node) == 0)
+    if(power_control::isDefaultSettings == true)
     {
         // Request POWER_BUTTON GPIO events
         if (!power_control::requestGPIOEvents(
@@ -2247,7 +2258,7 @@ int main(int argc, char* argv[])
 
     // Power Control Interface
     power_control::hostIface = hostServer.add_interface(
-        "/xyz/openbmc_project/state/host0", hostName.c_str());
+        "/xyz/openbmc_project/state/host0", power_control::hostName.c_str());
 
     power_control::hostIface->register_property(
         "RequestedHostTransition",
@@ -2306,7 +2317,7 @@ int main(int argc, char* argv[])
     // Chassis Control Interface
     power_control::chassisIface =
         chassisServer.add_interface("/xyz/openbmc_project/state/chassis0",
-                                    chassisName.c_str());
+                                    power_control::chassisName.c_str());
 
     power_control::chassisIface->register_property(
         "RequestedPowerTransition",
@@ -2347,7 +2358,7 @@ int main(int argc, char* argv[])
     power_control::chassisIface->initialize();
 
   
-    if(std::stoi(power_control::node) == 0)
+    if(power_control::isDefaultSettings == true)
     {
         // Buttons Service
         sdbusplus::asio::object_server buttonsServer =
@@ -2356,7 +2367,7 @@ int main(int argc, char* argv[])
         // Power Button Interface
         power_control::powerButtonIface = buttonsServer.add_interface(
                 "/xyz/openbmc_project/chassis/buttons/power",
-        buttonName.c_str());
+        power_control::buttonName.c_str());
 
         power_control::powerButtonIface->register_property(
                 "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -2399,7 +2410,7 @@ int main(int argc, char* argv[])
         // Reset Button Interface
         power_control::resetButtonIface = buttonsServer.add_interface(
                 "/xyz/openbmc_project/chassis/buttons/reset",
-                buttonName.c_str());
+                power_control::buttonName.c_str());
 
         power_control::resetButtonIface->register_property(
                 "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -2485,7 +2496,7 @@ int main(int argc, char* argv[])
             // NMI out Interface
             power_control::nmiOutIface =
             nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
-                                        nmiName.c_str());
+                                        power_control::nmiName.c_str());
             power_control::nmiOutIface->register_method("NMI",
                                                         power_control::nmiReset);
             power_control::nmiOutIface->initialize();
@@ -2496,7 +2507,7 @@ int main(int argc, char* argv[])
             // ID Button Interface
             power_control::idButtonIface = buttonsServer.add_interface(
                     "/xyz/openbmc_project/chassis/buttons/id",
-            buttonName.c_str());
+            power_control::buttonName.c_str());
 
             // Check ID button state
             bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
@@ -2513,7 +2524,7 @@ int main(int argc, char* argv[])
         // OS State Interface
         power_control::osIface = osServer.add_interface(
             "/xyz/openbmc_project/state/os",
-            osName.c_str());
+            power_control::osName.c_str());
 
         // Get the initial OS state based on POST complete
         //      0: Asserted, OS state is "Standby" (ready to boot)
@@ -2535,7 +2546,7 @@ int main(int argc, char* argv[])
     // Restart Cause Interface
     power_control::restartCauseIface = restartCauseServer.add_interface(
         "/xyz/openbmc_project/control/host0/restart_cause",
-        rstCauseName.c_str());
+        power_control::rstCauseName.c_str());
 
     power_control::restartCauseIface->register_property(
         "RestartCause",
