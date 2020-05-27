@@ -56,9 +56,14 @@ static std::string nmiOut;
 static std::string sioPwrGood;
 static std::string sioOnCtrl;
 static std::string sioS5;
+static std::string postComplete;
+static std::string powerButton;
+static std::string resetButton;
+static std::string idButton;
+static std::string nmiButton;
+
 std::string node = "0";
 static bool sioDisabled = true;
-static bool isDefaultSettings = false;
 
 static std::string hostName = "xyz.openbmc_project.State.Host";
 static std::string chassisName = "xyz.openbmc_project.State.Chassis";
@@ -1301,7 +1306,6 @@ static void pohCounterTimerStart()
 
 static void currentHostStateMonitor()
 {
-    int host = std::stoi(power_control::node);
     if (getHostState(powerState) ==
         "xyz.openbmc_project.State.Host.HostState.Running")
     {
@@ -1321,7 +1325,7 @@ static void currentHostStateMonitor()
         "type='signal',member='PropertiesChanged', "
         "interface='org.freedesktop.DBus.Properties', "
         "arg0namespace='xyz.openbmc_project.State.Host'",
-        [host](sdbusplus::message::message& message) {
+        [](sdbusplus::message::message& message) {
             std::string intfName;
             std::map<std::string, std::variant<std::string>> properties;
 
@@ -1355,7 +1359,7 @@ static void currentHostStateMonitor()
             {
                 pohCounterTimer.cancel();
             
-                if(host == 0)
+                if (power_control::postCompleteLine)
                 {
                     // POST_COMPLETE GPIO event is not working in some platforms
                     // when power state is changed to OFF. This resulted in
@@ -2070,10 +2074,15 @@ static int loadConfigValues()
     }
     try
     {
-        auto data = nlohmann::json::parse(configFile, nullptr);
-        pwrOk     = data["power-ok"];
-        pwrOut    = data["power-out"];
-        resetOut  = data["reset-out"];
+        auto data   = nlohmann::json::parse(configFile, nullptr);
+        pwrOk       = data["power-ok"];
+        pwrOut      = data["power-out"];
+        resetOut    = data["reset-out"];
+        nmiOut      = data["nmi-out"];
+        postComplete= data["post-complete"];
+        sioPwrGood  = data["sio-pwrgd"];
+        sioOnCtrl   = data["sio-onctl"];
+        sioS5       = data["sio-s5"];
     }
     catch (nlohmann::json::exception &e)
     {
@@ -2116,7 +2125,6 @@ int main(int argc, char* argv[])
     }
     else //load default values
     {
-        power_control::isDefaultSettings = true;
         power_control::pwrOut = "POWER_OUT";
         power_control::resetOut = "RESET_OUT";
         power_control::nmiOut = "NMI_OUT";
@@ -2124,6 +2132,11 @@ int main(int argc, char* argv[])
         power_control::sioPwrGood = "SIO_POWER_GOOD";
         power_control::sioOnCtrl = "SIO_ONCONTROL";
         power_control::sioS5 = "SIO_S5";
+        power_control::postComplete = "POST_COMPLETE";
+        power_control::powerButton = "POWER_BUTTON;
+        power_control::resetButton = "RESET_BUTTON";
+        power_control::idButton = "ID_BUTTON";
+        power_control::nmiButton = "NMI_BUTTON";
     }
     
     // Request all the dbus names
@@ -2174,42 +2187,55 @@ int main(int argc, char* argv[])
 
     }
 
-    if(power_control::isDefaultSettings == true)
+    if(!power_control::powerButton.empty())
     {
         // Request POWER_BUTTON GPIO events
         if (!power_control::requestGPIOEvents(
-                "POWER_BUTTON", power_control::powerButtonHandler,
+                power_control::powerButton, power_control::powerButtonHandler,
                 power_control::powerButtonLine, power_control::powerButtonEvent))
         {
             return -1;
         }
+    }
 
+    if(!power_control::resetButton.empty())
+    {
         // Request RESET_BUTTON GPIO events
         if (!power_control::requestGPIOEvents(
-                "RESET_BUTTON", power_control::resetButtonHandler,
+                power_control::resetButton, power_control::resetButtonHandler,
                 power_control::resetButtonLine, power_control::resetButtonEvent))
         {
             return -1;
         }
-
+    }
+    
+    if(!power_control::nmiButton.empty())
+    {
         // Request NMI_BUTTON GPIO events
         power_control::requestGPIOEvents(
-            "NMI_BUTTON", power_control::nmiButtonHandler,
+            power_control::nmiButton, power_control::nmiButtonHandler,
             power_control::nmiButtonLine, power_control::nmiButtonEvent);
+    }
 
+    if(!power_control::idButton.empty())
+    {
         // Request ID_BUTTON GPIO events
         power_control::requestGPIOEvents(
-            "ID_BUTTON", power_control::idButtonHandler,
+            power_control::idButton, power_control::idButtonHandler,
             power_control::idButtonLine, power_control::idButtonEvent);
+    }
 
+    if(!power_control::postComplete.empty())
+    {
         // Request POST_COMPLETE GPIO events
         if (!power_control::requestGPIOEvents(
-                "POST_COMPLETE", power_control::postCompleteHandler,
+                power_control::postComplete, power_control::postCompleteHandler,
                 power_control::postCompleteLine, power_control::postCompleteEvent))
         {
             return -1;
         }
     }
+    
     // initialize NMI_OUT GPIO.
     power_control::setGPIOOutput(power_control::nmiOutName, 0,
                                  power_control::nmiOutLine);
@@ -2358,7 +2384,7 @@ int main(int argc, char* argv[])
     power_control::chassisIface->initialize();
 
   
-    if(power_control::isDefaultSettings == true)
+    if(power_control::powerButtonLine)
     {
         // Buttons Service
         sdbusplus::asio::object_server buttonsServer =
@@ -2411,7 +2437,10 @@ int main(int argc, char* argv[])
         power_control::resetButtonIface = buttonsServer.add_interface(
                 "/xyz/openbmc_project/chassis/buttons/reset",
                 power_control::buttonName.c_str());
+    }
 
+    if(power_control::resetButtonLine)
+    {
         power_control::resetButtonIface->register_property(
                 "ButtonMasked", false, [](const bool requested, bool& current) {
             if (requested)
@@ -2449,74 +2478,77 @@ int main(int argc, char* argv[])
                                                            resetButtonPressed);
 
         power_control::resetButtonIface->initialize();
+    }
 
-        if (power_control::nmiButtonLine)
-        {
-            // NMI Button Interface
-            power_control::nmiButtonIface = buttonsServer.add_interface(
-                    "/xyz/openbmc_project/chassis/buttons/nmi",
-                    "xyz.openbmc_project.Chassis.Buttons");
+    if (power_control::nmiButtonLine)
+    {
+        // NMI Button Interface
+        power_control::nmiButtonIface = buttonsServer.add_interface(
+                "/xyz/openbmc_project/chassis/buttons/nmi",
+                "xyz.openbmc_project.Chassis.Buttons");
 
-            power_control::nmiButtonIface->register_property(
-                    "ButtonMasked", false, [](const bool requested, bool& current) {
-                if (power_control::nmiButtonMasked == requested)
-                {
-                    // NMI button mask is already set as requested, so no change
-                    return 1;
-                }
-                if (requested)
-                {
-                    std::cerr << "Host" << power_control::node << ": " <<  "NMI Button Masked.\n";
-                    power_control::nmiButtonMasked = true;
-                }
-                else
-                {
-                    std::cerr << "Host" << power_control::node << ": " <<  "NMI Button Un-masked.\n";
-                    power_control::nmiButtonMasked = false;
-                }
-                // Update the mask setting
-                current = power_control::nmiButtonMasked;
+        power_control::nmiButtonIface->register_property(
+                "ButtonMasked", false, [](const bool requested, bool& current) {
+            if (power_control::nmiButtonMasked == requested)
+            {
+                // NMI button mask is already set as requested, so no change
                 return 1;
-            });
+            }
+            if (requested)
+            {
+                std::cerr << "Host" << power_control::node << ": " <<  "NMI Button Masked.\n";
+                power_control::nmiButtonMasked = true;
+            }
+            else
+            {
+                std::cerr << "Host" << power_control::node << ": " <<  "NMI Button Un-masked.\n";
+                power_control::nmiButtonMasked = false;
+            }
+            // Update the mask setting
+            current = power_control::nmiButtonMasked;
+            return 1;
+        });
 
-            // Check NMI button state
-            bool nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
-            power_control::nmiButtonIface->register_property("ButtonPressed",
-                                                            nmiButtonPressed);
+        // Check NMI button state
+        bool nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
+        power_control::nmiButtonIface->register_property("ButtonPressed",
+                                                        nmiButtonPressed);
 
-            power_control::nmiButtonIface->initialize();
-        }
+        power_control::nmiButtonIface->initialize();
+    }
 
-        if (power_control::nmiOutLine)
-        {
-            // NMI out Service
-            sdbusplus::asio::object_server nmiOutServer =
-            sdbusplus::asio::object_server(power_control::conn);
+    if (power_control::nmiOutLine)
+    {
+        // NMI out Service
+        sdbusplus::asio::object_server nmiOutServer =
+        sdbusplus::asio::object_server(power_control::conn);
 
-            // NMI out Interface
-            power_control::nmiOutIface =
-            nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
-                                        power_control::nmiName.c_str());
-            power_control::nmiOutIface->register_method("NMI",
-                                                        power_control::nmiReset);
-            power_control::nmiOutIface->initialize();
-        }
+        // NMI out Interface
+        power_control::nmiOutIface =
+        nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
+                                    power_control::nmiName.c_str());
+        power_control::nmiOutIface->register_method("NMI",
+                                                    power_control::nmiReset);
+        power_control::nmiOutIface->initialize();
+    }
 
-        if (power_control::idButtonLine)
-        {
-            // ID Button Interface
-            power_control::idButtonIface = buttonsServer.add_interface(
-                    "/xyz/openbmc_project/chassis/buttons/id",
-            power_control::buttonName.c_str());
+    if (power_control::idButtonLine)
+    {
+        // ID Button Interface
+        power_control::idButtonIface = buttonsServer.add_interface(
+                "/xyz/openbmc_project/chassis/buttons/id",
+        power_control::buttonName.c_str());
 
-            // Check ID button state
-            bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
-            power_control::idButtonIface->register_property("ButtonPressed",
-                                                            idButtonPressed);
+        // Check ID button state
+        bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
+        power_control::idButtonIface->register_property("ButtonPressed",
+                                                        idButtonPressed);
 
-            power_control::idButtonIface->initialize();
-        }
+        power_control::idButtonIface->initialize();
+    }
 
+    if (power_control::postCompleteLine)
+    {
         // OS State Service
         sdbusplus::asio::object_server osServer =
             sdbusplus::asio::object_server(power_control::conn);
