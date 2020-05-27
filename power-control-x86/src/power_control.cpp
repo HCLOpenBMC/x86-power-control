@@ -309,8 +309,8 @@ static std::string getEventName(Event event)
 static void logEvent(const std::string_view stateHandler, const Event event)
 {
     std::string logMsg{stateHandler};
-	std::string host = "Host" + power_control::node + ": ";
-	logMsg.insert(0,host);
+    std::string host = "Host" + power_control::node + ": ";
+    logMsg.insert(0,host);
     logMsg += ": " + getEventName(event) + " event received";
     phosphor::logging::log<phosphor::logging::level::INFO>(
         logMsg.c_str(),
@@ -1613,9 +1613,9 @@ static void powerStateCycleOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
-		{
+        {
             powerCycleTimer.cancel();
-			if(power_control::sioDisabled)
+            if(power_control::sioDisabled)
             {   
                 setPowerState(PowerState::on);
             }
@@ -1624,7 +1624,7 @@ static void powerStateCycleOff(const Event event)
                 setPowerState(PowerState::waitForSIOPowerGood);
             }
             break;
-		}
+        }
         case Event::sioS5DeAssert:
             powerCycleTimer.cancel();
             setPowerState(PowerState::waitForPSPowerOK);
@@ -2093,39 +2093,39 @@ static int loadConfigValues()
 int main(int argc, char* argv[])
 {
     if(argc > 1)
-	{
-		power_control::node = argv[1]; 
-	}
+    {
+        power_control::node = argv[1]; 
+    }
     std::cerr << "Host" << power_control::node << ": " <<  "Start Chassis power control service ...\n";
 
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
-	if(std::stoi(power_control::node) > 0)
-	{
-		if(power_control::loadConfigValues()  == -1)
-		{
-			std::cerr << "Host" << power_control::node << ": " <<  "Error in Parsing...\n";
-		}
-		power_control::hostName = "xyz.openbmc_project.State.Host" + power_control::node;
-	    power_control::chassisName = "xyz.openbmc_project.State.Chassis" + power_control::node;
-	    power_control::osName = "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
-	    power_control::buttonName = "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
-	    power_control::nmiName = "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
-	    power_control::rstCauseName = "xyz.openbmc_project.Control.Host.RestartCause" + power_control::node;
-	}
-	else //load default values
-	{
-		power_control::isDefaultSettings = true;
-		power_control::pwrOut = "POWER_OUT";
+    if(std::stoi(power_control::node) > 0)
+    {
+        if(power_control::loadConfigValues()  == -1)
+        {
+            std::cerr << "Host" << power_control::node << ": " <<  "Error in Parsing...\n";
+        }
+        power_control::hostName = "xyz.openbmc_project.State.Host" + power_control::node;
+        power_control::chassisName = "xyz.openbmc_project.State.Chassis" + power_control::node;
+        power_control::osName = "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
+        power_control::buttonName = "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
+        power_control::nmiName = "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
+        power_control::rstCauseName = "xyz.openbmc_project.Control.Host.RestartCause" + power_control::node;
+    }
+    else //load default values
+    {
+        power_control::isDefaultSettings = true;
+        power_control::pwrOut = "POWER_OUT";
         power_control::resetOut = "RESET_OUT";
         power_control::nmiOut = "NMI_OUT";
         power_control::pwrOk = "PS_PWROK";
         power_control::sioPwrGood = "SIO_POWER_GOOD";
         power_control::sioOnCtrl = "SIO_ONCONTROL";
         power_control::sioS5 = "SIO_S5";
-	}
-	
+    }
+    
     // Request all the dbus names
     power_control::conn->request_name(power_control::hostName.c_str());
     power_control::conn->request_name(power_control::chassisName.c_str());

@@ -10,3 +10,4 @@ BusName=xyz.openbmc_project.State.Host
 
 [Install]
 WantedBy=sysinit.target
+
