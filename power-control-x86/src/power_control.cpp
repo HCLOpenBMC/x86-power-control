@@ -2133,7 +2133,7 @@ int main(int argc, char* argv[])
         power_control::sioOnCtrl = "SIO_ONCONTROL";
         power_control::sioS5 = "SIO_S5";
         power_control::postComplete = "POST_COMPLETE";
-        power_control::powerButton = "POWER_BUTTON;
+        power_control::powerButton = "POWER_BUTTON";
         power_control::resetButton = "RESET_BUTTON";
         power_control::idButton = "ID_BUTTON";
         power_control::nmiButton = "NMI_BUTTON";
@@ -2383,12 +2383,12 @@ int main(int argc, char* argv[])
 
     power_control::chassisIface->initialize();
 
-  
-    if(power_control::powerButtonLine)
+	// Buttons Service
+    sdbusplus::asio::object_server buttonsServer =
+    	sdbusplus::asio::object_server(power_control::conn);
+    
+	if(power_control::powerButtonLine)
     {
-        // Buttons Service
-        sdbusplus::asio::object_server buttonsServer =
-            sdbusplus::asio::object_server(power_control::conn);
 
         // Power Button Interface
         power_control::powerButtonIface = buttonsServer.add_interface(
