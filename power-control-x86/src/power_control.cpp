@@ -21,12 +21,13 @@
 #include <boost/asio/posix/stream_descriptor.hpp>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
-#include <filesystem>
-#include <fstream>
 #include <gpiod.hpp>
-#include <iostream>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
+
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <string_view>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -37,6 +38,7 @@ static boost::asio::io_service io;
 std::shared_ptr<sdbusplus::asio::connection> conn;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
+static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSysIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> powerButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> resetButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> nmiButtonIface;
@@ -212,7 +214,8 @@ static void logStateTransition(const PowerState state)
     std::string logMsg = "Host" + power_control::node + ": " + "Moving to \"" + getPowerStateName(state) + "\" state";
     phosphor::logging::log<phosphor::logging::level::INFO>(
         logMsg.c_str(),
-        phosphor::logging::entry("STATE=%s", getPowerStateName(state).c_str()));
+        phosphor::logging::entry("STATE=%s", getPowerStateName(state).c_str()),
+        phosphor::logging::entry("HOST=%s", power_control::node.c_str()));
 }
 
 enum class Event
@@ -1867,6 +1870,26 @@ static void resetButtonHandler()
         });
 }
 
+static constexpr auto systemdBusname = "org.freedesktop.systemd1";
+static constexpr auto systemdPath = "/org/freedesktop/systemd1";
+static constexpr auto systemdInterface = "org.freedesktop.systemd1.Manager";
+static constexpr auto systemTargetName = "chassis-system-reset.target";
+
+void systemReset()
+{
+    conn->async_method_call(
+        [](boost::system::error_code ec) {
+            if (ec)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "Failed to call chassis system reset",
+                    phosphor::logging::entry("ERR=%s", ec.message().c_str()));
+            }
+        },
+        systemdBusname, systemdPath, systemdInterface, "StartUnit",
+        systemTargetName, "replace");
+}
+
 static void nmiSetEnablePorperty(bool value)
 {
     conn->async_method_call(
@@ -2383,7 +2406,44 @@ int main(int argc, char* argv[])
 
     power_control::chassisIface->initialize();
 
-	// Buttons Service
+    // Chassis System Service
+    sdbusplus::asio::object_server chassisSysServer =
+        sdbusplus::asio::object_server(power_control::conn);
+
+    // Chassis System Interface
+    power_control::chassisSysIface = chassisSysServer.add_interface(
+        "/xyz/openbmc_project/state/chassis_system0",
+        "xyz.openbmc_project.State.Chassis");
+
+    power_control::chassisSysIface->register_property(
+        "RequestedPowerTransition",
+        std::string("xyz.openbmc_project.State.Chassis.Transition.On"),
+        [](const std::string& requested, std::string& resp) {
+            if (requested ==
+                "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
+            {
+                power_control::systemReset();
+                addRestartCause(power_control::RestartCause::command);
+            }
+            else
+            {
+                std::cerr << "Unrecognized chassis system state transition "
+                             "request.\n";
+                throw std::invalid_argument("Unrecognized Transition Request");
+                return 0;
+            }
+            resp = requested;
+            return 1;
+        });
+    power_control::chassisSysIface->register_property(
+        "CurrentPowerState",
+        std::string(power_control::getChassisState(power_control::powerState)));
+    power_control::chassisSysIface->register_property(
+        "LastStateChangeTime", power_control::getCurrentTimeMs());
+
+    power_control::chassisSysIface->initialize();
+
+    // Buttons Service
     sdbusplus::asio::object_server buttonsServer =
     	sdbusplus::asio::object_server(power_control::conn);
     
@@ -2521,11 +2581,11 @@ int main(int argc, char* argv[])
     {
         // NMI out Service
         sdbusplus::asio::object_server nmiOutServer =
-        sdbusplus::asio::object_server(power_control::conn);
+            sdbusplus::asio::object_server(power_control::conn);
 
         // NMI out Interface
         power_control::nmiOutIface =
-        nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
+            nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
                                     power_control::nmiName.c_str());
         power_control::nmiOutIface->register_method("NMI",
                                                     power_control::nmiReset);
