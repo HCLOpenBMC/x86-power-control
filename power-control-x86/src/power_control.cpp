@@ -996,6 +996,7 @@ static bool requestGPIOEvents(
                 // TODO: throw here to force power-control to restart?
                 return;
             }
+			std::cerr << "Host" << power_control::node << ": " << "dharshan Request gpio\n";
             handler();
         });
     return true;
@@ -2103,32 +2104,28 @@ inline static sdbusplus::bus::match::match
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message &msg) {
         std::string thresholdInterface;
-        boost::container::flat_map<std::string, std::variant<int>>
-            propertiesChanged;
+        boost::container::flat_map<std::string, std::variant<uint8_t>> propertiesChanged;
         msg.read(thresholdInterface, propertiesChanged);
 
         if (propertiesChanged.empty())
         {
-        	std::cerr << "Host" << power_control::node << ": " <<  "Propertie not changed\n ";
             return;
         }
         std::string event = propertiesChanged.begin()->first;
-        	std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "\n";
 
-        auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
-
-        	std::cerr << "Host" << power_control::node << ": " <<  "Varient :" <<*variant << "\n";
+        auto variant = std::get_if<uint8_t>(&propertiesChanged.begin()->second);
+//		if(variant == nullptr)
+//		{
+//			auto  variant1 = std::get_if<bool>(&propertiesChanged.begin()->second);
+//			std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<*variant1 << "\n";
+//		}
+		
+		int var = *variant;
+        	std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
         if (event.empty() || nullptr == variant)
         {
             return;
    		}
-        if (event == "HAND_SW1")
-        {
-            if (*variant == 1)
-            {
-                std::cerr<<"Received the expected Signl\n";
-            }
-        }
     };
 
     sdbusplus::bus::match::match pulseEventMatcher(
