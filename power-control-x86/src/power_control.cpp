@@ -2126,16 +2126,7 @@ inline static sdbusplus::bus::match::match
 		}
 		else if(event == "PowerButtonPressed" && var == 1)
 		{
-			multiNodePowerbuttonPressed = true;
-		}
-		else if(event == "ResetButtonPressed" && var == 1)
-		{
-			multiNodeResetbuttonPressed = true;	
-		}
-		
-		if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
-		{
-			if(multiNodePowerbuttonPressed)
+			if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
 			{
 				std::cerr<<"Power Button Pressed\n";
 				powerButtonPressLog();
@@ -2143,7 +2134,10 @@ inline static sdbusplus::bus::match::match
 				sendPowerControlEvent(Event::powerButtonPressed);
 				addRestartCause(RestartCause::powerButton);
 			}
-			if(multiNodeResetbuttonPressed)
+		}
+		else if(event == "ResetButtonPressed" && var == 1)
+		{
+			if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
 			{
 				std::cerr<<"Reset Button Pressed\n";
 				resetButtonPressLog();
@@ -2151,7 +2145,7 @@ inline static sdbusplus::bus::match::match
 				sendPowerControlEvent(Event::resetButtonPressed);
 				addRestartCause(RestartCause::resetButton);
 			}
-		} 
+		}
 		
         if (event.empty())
         {
