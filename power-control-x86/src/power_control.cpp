@@ -62,7 +62,10 @@ static std::string resetButton;
 static std::string idButton;
 static std::string nmiButton;
 
-std::string node = "0";
+static std::string node = "0";
+static bool multiNodePowerbuttonPressed = false;
+static bool multiNodeResetbuttonPressed = false;
+static int selectorSwitchPosition;
 static bool sioDisabled = true;
 
 static std::string hostName = "xyz.openbmc_project.State.Host";
@@ -2104,7 +2107,7 @@ inline static sdbusplus::bus::match::match
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message &msg) {
         std::string thresholdInterface;
-        boost::container::flat_map<std::string, std::variant<uint8_t>> propertiesChanged;
+        boost::container::flat_map<std::string, std::variant<int>> propertiesChanged;
         msg.read(thresholdInterface, propertiesChanged);
 
         if (propertiesChanged.empty())
@@ -2112,17 +2115,45 @@ inline static sdbusplus::bus::match::match
             return;
         }
         std::string event = propertiesChanged.begin()->first;
-
-        auto variant = std::get_if<uint8_t>(&propertiesChanged.begin()->second);
-//		if(variant == nullptr)
-//		{
-//			auto  variant1 = std::get_if<bool>(&propertiesChanged.begin()->second);
-//			std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<*variant1 << "\n";
-//		}
-		
+        auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
 		int var = *variant;
-        	std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
-        if (event.empty() || nullptr == variant)
+		int checkVar =10;
+        std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
+		
+		if(event == "Position")
+		{
+			selectorSwitchPosition = var;
+		}
+		else if(event == "PowerButtonPressed" && var == 1)
+		{
+			multiNodePowerbuttonPressed = true;
+		}
+		else if(event == "ResetButtonPressed" && var == 1)
+		{
+			multiNodeResetbuttonPressed = true;	
+		}
+		
+		if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+		{
+			if(multiNodePowerbuttonPressed)
+			{
+				std::cerr<<"Power Button Pressed\n";
+				powerButtonPressLog();
+				multiNodePowerbuttonPressed = false;
+				sendPowerControlEvent(Event::powerButtonPressed);
+				addRestartCause(RestartCause::powerButton);
+			}
+			if(multiNodeResetbuttonPressed)
+			{
+				std::cerr<<"Reset Button Pressed\n";
+				resetButtonPressLog();
+				multiNodePowerbuttonPressed = false;
+				sendPowerControlEvent(Event::resetButtonPressed);
+				addRestartCause(RestartCause::resetButton);
+			}
+		} 
+		
+        if (event.empty())
         {
             return;
    		}
