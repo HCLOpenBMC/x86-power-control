@@ -22,6 +22,7 @@
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
 #include <gpiod.hpp>
+#include <nlohmann/json.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 
@@ -29,8 +30,6 @@
 #include <fstream>
 #include <iostream>
 #include <string_view>
-
-#include <nlohmann/json.hpp>
 
 namespace power_control
 {
@@ -2094,16 +2093,16 @@ static int loadConfigValues()
 
 int main(int argc, char* argv[])
 {
-	if (argc > 1)
+    if (argc > 1)
     {
         power_control::node = argv[1];
     }
-    
-	std::cerr << "Start Chassis power control service...\n";
+
+    std::cerr << "Start Chassis power control service...\n";
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
-	
-	if (std::stoi(power_control::node) > 0)
+
+    if (std::stoi(power_control::node) > 0)
     {
         if (power_control::loadConfigValues() == -1)
         {
@@ -2140,7 +2139,7 @@ int main(int argc, char* argv[])
         power_control::nmiButtonName = "NMI_BUTTON";
     }
 
-	// Request all the dbus names
+    // Request all the dbus names
     power_control::conn->request_name(power_control::hostName.c_str());
     power_control::conn->request_name(power_control::chassisName.c_str());
     power_control::conn->request_name(power_control::osName.c_str());
@@ -2148,98 +2147,107 @@ int main(int argc, char* argv[])
     power_control::conn->request_name(power_control::nmiName.c_str());
     power_control::conn->request_name(power_control::rstCauseName.c_str());
 
-    if (power_control::sioPwrGoodName.empty() && power_control::sioOnControlName.empty() &&
+    if (power_control::sioPwrGoodName.empty() &&
+        power_control::sioOnControlName.empty() &&
         power_control::sioS5Name.empty())
     {
         power_control::sioDisabled = true;
     }
-	
-	// Request PS_PWROK GPIO events
-    if(!power_control::powerOkName.empty())
-	{
-		if (!power_control::requestGPIOEvents(
-				power_control::powerOkName,power_control::psPowerOKHandler,
-				power_control::psPowerOKLine, power_control::psPowerOKEvent))
-		{
-			return -1;
-		}
-	}
 
-	if(power_control::sioDisabled == false)
-	{
-		// Request SIO_POWER_GOOD GPIO events
-		if (!power_control::requestGPIOEvents(
-				power_control::sioPwrGoodName,power_control::sioPowerGoodHandler,
-				power_control::sioPowerGoodLine, power_control::sioPowerGoodEvent))
-		{
-			return -1;
-		}
+    // Request PS_PWROK GPIO events
+    if (!power_control::powerOkName.empty())
+    {
+        if (!power_control::requestGPIOEvents(
+                power_control::powerOkName, power_control::psPowerOKHandler,
+                power_control::psPowerOKLine, power_control::psPowerOKEvent))
+        {
+            return -1;
+        }
+    }
 
-		// Request SIO_ONCONTROL GPIO events
-		if (!power_control::requestGPIOEvents(
-				power_control::sioOnControlName,power_control::sioOnControlHandler,
-				power_control::sioOnControlLine, power_control::sioOnControlEvent))
-		{
-			return -1;
-		}
+    if (power_control::sioDisabled == false)
+    {
+        // Request SIO_POWER_GOOD GPIO events
+        if (!power_control::requestGPIOEvents(
+                power_control::sioPwrGoodName,
+                power_control::sioPowerGoodHandler,
+                power_control::sioPowerGoodLine,
+                power_control::sioPowerGoodEvent))
+        {
+            return -1;
+        }
 
-		// Request SIO_S5 GPIO events
-		if (!power_control::requestGPIOEvents(power_control::sioS5Name, power_control::sioS5Handler,
-											  power_control::sioS5Line,
-											  power_control::sioS5Event))
-		{
-			return -1;
-		}
-	}
-  
+        // Request SIO_ONCONTROL GPIO events
+        if (!power_control::requestGPIOEvents(
+                power_control::sioOnControlName,
+                power_control::sioOnControlHandler,
+                power_control::sioOnControlLine,
+                power_control::sioOnControlEvent))
+        {
+            return -1;
+        }
+
+        // Request SIO_S5 GPIO events
+        if (!power_control::requestGPIOEvents(
+                power_control::sioS5Name, power_control::sioS5Handler,
+                power_control::sioS5Line, power_control::sioS5Event))
+        {
+            return -1;
+        }
+    }
+
     // Request POWER_BUTTON GPIO events
     if (!power_control::powerButtonName.empty())
     {
-		if (!power_control::requestGPIOEvents(
-				power_control::powerButtonName, power_control::powerButtonHandler,
-				power_control::powerButtonLine, power_control::powerButtonEvent))
-		{
-			return -1;
-		}
-	}
+        if (!power_control::requestGPIOEvents(power_control::powerButtonName,
+                                              power_control::powerButtonHandler,
+                                              power_control::powerButtonLine,
+                                              power_control::powerButtonEvent))
+        {
+            return -1;
+        }
+    }
 
     // Request RESET_BUTTON GPIO events
     if (!power_control::resetButtonName.empty())
     {
-		if (!power_control::requestGPIOEvents(
-				power_control::resetButtonName, power_control::resetButtonHandler,
-				power_control::resetButtonLine, power_control::resetButtonEvent))
-		{
-			return -1;
-		}
-	}
+        if (!power_control::requestGPIOEvents(power_control::resetButtonName,
+                                              power_control::resetButtonHandler,
+                                              power_control::resetButtonLine,
+                                              power_control::resetButtonEvent))
+        {
+            return -1;
+        }
+    }
 
     // Request NMI_BUTTON GPIO events
-	if (!power_control::nmiButtonName.empty())
+    if (!power_control::nmiButtonName.empty())
     {
-		power_control::requestGPIOEvents(
-			power_control::nmiButtonName, power_control::nmiButtonHandler,
-			power_control::nmiButtonLine, power_control::nmiButtonEvent);
-	}
-	
+        power_control::requestGPIOEvents(
+            power_control::nmiButtonName, power_control::nmiButtonHandler,
+            power_control::nmiButtonLine, power_control::nmiButtonEvent);
+    }
+
     // Request ID_BUTTON GPIO events
-	if (!power_control::idButtonName.empty())
-	{
-		power_control::requestGPIOEvents(
-			power_control::idButtonName, power_control::idButtonHandler,
-			power_control::idButtonLine, power_control::idButtonEvent);
-	}
+    if (!power_control::idButtonName.empty())
+    {
+        power_control::requestGPIOEvents(
+            power_control::idButtonName, power_control::idButtonHandler,
+            power_control::idButtonLine, power_control::idButtonEvent);
+    }
 
     // Request POST_COMPLETE GPIO events
     if (!power_control::postCompleteName.empty())
     {
-		if (!power_control::requestGPIOEvents(
-				power_control::postCompleteName, power_control::postCompleteHandler,
-				power_control::postCompleteLine, power_control::postCompleteEvent))
-		{
-			return -1;
-		}
-	}
+        if (!power_control::requestGPIOEvents(
+                power_control::postCompleteName,
+                power_control::postCompleteHandler,
+                power_control::postCompleteLine,
+                power_control::postCompleteEvent))
+        {
+            return -1;
+        }
+    }
 
     // initialize NMI_OUT GPIO.
     power_control::setGPIOOutput(power_control::nmiOutName, 0,
@@ -2475,7 +2483,7 @@ int main(int argc, char* argv[])
     // Reset Button Interface
     power_control::resetButtonIface = buttonsServer.add_interface(
         "/xyz/openbmc_project/chassis/buttons/reset",
-		power_control::buttonName.c_str());
+        power_control::buttonName.c_str());
 
     power_control::resetButtonIface->register_property(
         "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -2520,7 +2528,7 @@ int main(int argc, char* argv[])
         // NMI Button Interface
         power_control::nmiButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/nmi",
-			power_control::buttonName.c_str());
+            power_control::buttonName.c_str());
 
         power_control::nmiButtonIface->register_property(
             "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -2572,7 +2580,7 @@ int main(int argc, char* argv[])
         // ID Button Interface
         power_control::idButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/id",
-			power_control::buttonName.c_str());
+            power_control::buttonName.c_str());
 
         // Check ID button state
         bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
@@ -2588,8 +2596,7 @@ int main(int argc, char* argv[])
 
     // OS State Interface
     power_control::osIface = osServer.add_interface(
-        "/xyz/openbmc_project/state/os",
-		power_control::osName.c_str());
+        "/xyz/openbmc_project/state/os", power_control::osName.c_str());
 
     // Get the initial OS state based on POST complete
     //      0: Asserted, OS state is "Standby" (ready to boot)
@@ -2610,7 +2617,7 @@ int main(int argc, char* argv[])
     // Restart Cause Interface
     power_control::restartCauseIface = restartCauseServer.add_interface(
         "/xyz/openbmc_project/control/host0/restart_cause",
-		power_control::rstCauseName.c_str());
+        power_control::rstCauseName.c_str());
 
     power_control::restartCauseIface->register_property(
         "RestartCause",
