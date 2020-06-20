@@ -2067,13 +2067,17 @@ static int loadConfigValues()
     try
     {
         auto data = nlohmann::json::parse(configFile, nullptr);
-        powerOkName = data["power-ok"];
-        powerOutName = data["power-out"];
-        resetOutName = data["reset-out"];
+        idButtonName = data["id-button"];
+        nmiButtonName = data["nmi-button"];
         nmiOutName = data["nmi-out"];
         postCompleteName = data["post-complete"];
-        sioPwrGoodName = data["sio-pwrgd"];
+        powerButtonName = data["power-button"];
+        powerOkName = data["power-ok"];
+        powerOutName = data["power-out"];
+        resetButtonName = data["reset-button"];
+        resetOutName = data["reset-out"];
         sioOnControlName = data["sio-onctl"];
+        sioPwrGoodName = data["sio-pwrgd"];
         sioS5Name = data["sio-s5"];
     }
     catch (nlohmann::json::exception& e)
@@ -2102,42 +2106,26 @@ int main(int argc, char* argv[])
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
-    if (std::stoi(power_control::node) > 0)
+    //Load GPIO's through json config file
+    if (power_control::loadConfigValues() == -1)
     {
-        if (power_control::loadConfigValues() == -1)
-        {
-            std::cerr << "Host" << power_control::node << ": "
-                      << "Error in Parsing...\n";
-        }
-        power_control::hostName =
-            "xyz.openbmc_project.State.Host" + power_control::node;
-        power_control::chassisName =
-            "xyz.openbmc_project.State.Chassis" + power_control::node;
-        power_control::osName =
-            "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
-        power_control::buttonName =
-            "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
-        power_control::nmiName =
-            "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
-        power_control::rstCauseName =
-            "xyz.openbmc_project.Control.Host.RestartCause" +
-            power_control::node;
+        std::cerr << "Host" << power_control::node << ": "
+                  << "Error in Parsing...\n";
     }
-    else // load default values
-    {
-        power_control::powerOutName = "POWER_OUT";
-        power_control::resetOutName = "RESET_OUT";
-        power_control::nmiOutName = "NMI_OUT";
-        power_control::powerOkName = "PS_PWROK";
-        power_control::sioPwrGoodName = "SIO_POWER_GOOD";
-        power_control::sioOnControlName = "SIO_ONCONTROL";
-        power_control::sioS5Name = "SIO_S5";
-        power_control::postCompleteName = "POST_COMPLETE";
-        power_control::powerButtonName = "POWER_BUTTON";
-        power_control::resetButtonName = "RESET_BUTTON";
-        power_control::idButtonName = "ID_BUTTON";
-        power_control::nmiButtonName = "NMI_BUTTON";
-    }
+
+    power_control::hostName =
+        "xyz.openbmc_project.State.Host" + power_control::node;
+    power_control::chassisName =
+        "xyz.openbmc_project.State.Chassis" + power_control::node;
+    power_control::osName =
+        "xyz.openbmc_project.State.OperatingSystem" + power_control::node;
+    power_control::buttonName =
+        "xyz.openbmc_project.Chassis.Buttons" + power_control::node;
+    power_control::nmiName =
+        "xyz.openbmc_project.Control.Host.NMI" + power_control::node;
+    power_control::rstCauseName =
+        "xyz.openbmc_project.Control.Host.RestartCause" +
+        power_control::node;
 
     // Request all the dbus names
     power_control::conn->request_name(power_control::hostName.c_str());
