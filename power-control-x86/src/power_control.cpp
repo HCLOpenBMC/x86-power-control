@@ -2074,11 +2074,11 @@ static int loadConfigValues()
     {
         std::cerr << "loadConfigValues : Cannot open config path\n ";
         return -1;
-    }    
+    }
     auto data = nlohmann::json::parse(configFile, nullptr);
 
     if (data.is_discarded())
-    {    
+    {
         std::cerr << "Power config readings JSON parser failure";
     }
 
@@ -2094,7 +2094,7 @@ static int loadConfigValues()
     sioOnControlName = data["SIOOnCtl"];
     sioPwrGoodName = data["SIOPwrGd"];
     sioS5Name = data["SIOS5"];
-    
+
     return 0;
 }
 
@@ -2106,7 +2106,7 @@ int main(int argc, char* argv[])
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
-    //Load GPIO's through json config file
+    // Load GPIO's through json config file
     if (power_control::loadConfigValues() == -1)
     {
         std::cerr << "Host" << power_control::node << ": "
