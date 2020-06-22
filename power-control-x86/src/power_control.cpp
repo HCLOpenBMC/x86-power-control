@@ -39,14 +39,6 @@ std::shared_ptr<sdbusplus::asio::connection> conn;
 static std::string node = "0";
 static bool sioDisabled = false;
 
-static std::string hostName = "xyz.openbmc_project.State.Host";
-static std::string chassisName = "xyz.openbmc_project.State.Chassis";
-static std::string osName = "xyz.openbmc_project.State.OperatingSystem";
-static std::string buttonName = "xyz.openbmc_project.Chassis.Buttons";
-static std::string nmiName = "xyz.openbmc_project.Control.Host.NMI";
-static std::string rstCauseName =
-    "xyz.openbmc_project.Control.Host.RestartCause";
-
 static std::string powerOutName;
 static std::string powerOkName;
 static std::string resetOutName;
@@ -2594,7 +2586,7 @@ int main(int argc, char* argv[])
     // Restart Cause Interface
     power_control::restartCauseIface = restartCauseServer.add_interface(
         "/xyz/openbmc_project/control/host0/restart_cause",
-        power_control::rstCauseName.c_str());
+        "xyz.openbmc_project.Control.Host.RestartCause");
 
     power_control::restartCauseIface->register_property(
         "RestartCause",
