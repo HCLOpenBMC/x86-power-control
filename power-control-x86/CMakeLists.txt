@@ -30,7 +30,6 @@ set(
   ${PROJECT_SOURCE_DIR}/service_files/chassis-system-reset.service
   ${PROJECT_SOURCE_DIR}/service_files/chassis-system-reset.target
   ${PROJECT_SOURCE_DIR}/service_files/xyz.openbmc_project.Chassis.Control.Power.service
-  ${PROJECT_SOURCE_DIR}/service_files/xyz.openbmc_project.Chassis.Control.Power@.service
   )
 
 set(
