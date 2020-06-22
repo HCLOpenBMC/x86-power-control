@@ -1,15 +1,15 @@
 {
-  "id-button": "ID_BUTTON",
-  "nmi-button": "NMI_BUTTON",
-  "nmi-out": "NMI_OUT",
-  "post-complete": "POST_COMPLETE",
-  "power-button": "POWER_BUTTON",
-  "power-ok": "PS_PWROK",
-  "power-out": "POWER_OUT",
-  "reset-button": "RESET_BUTTON",
-  "reset-out": "RESET_OUT",
-  "sio-onctl": "SIO_ONCONTROL",
-  "sio-pwrgd": "SIO_POWER_GOOD",
-  "sio-s5": "SIO_S5"
+  "IdButton": "ID_BUTTON",
+  "NMIButton": "NMI_BUTTON",
+  "NMIOut": "NMI_OUT",
+  "PostComplete": "POST_COMPLETE",
+  "PwrButton": "POWER_BUTTON",
+  "PwrOK": "PS_PWROK",
+  "PwrOut": "POWER_OUT",
+  "RstButton": "RESET_BUTTON",
+  "RstOut": "RESET_OUT",
+  "SIOOnCtl": "SIO_ONCONTROL",
+  "SIOPwrGd": "SIO_POWER_GOOD",
+  "SIOS5": "SIO_S5"
 }
 
