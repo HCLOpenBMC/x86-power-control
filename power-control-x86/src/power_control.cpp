@@ -2072,6 +2072,7 @@ static int loadConfigValues()
     if (data.is_discarded())
     {
         std::cerr << "Power config readings JSON parser failure";
+        return -1;
     }
 
     idButtonName = data["IdButton"];
