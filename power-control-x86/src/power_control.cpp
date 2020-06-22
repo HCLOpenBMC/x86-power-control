@@ -1514,8 +1514,8 @@ static void powerStateOn(const Event event)
             reset();
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1550,8 +1550,8 @@ static void powerStateWaitForPSPowerOK(const Event event)
             setPowerState(PowerState::on);
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1571,8 +1571,8 @@ static void powerStateWaitForSIOPowerGood(const Event event)
             forcePowerOff();
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1601,8 +1601,8 @@ static void powerStateFailedTransitionToOn(const Event event)
             powerOn();
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1637,8 +1637,8 @@ static void powerStateOff(const Event event)
             powerOn();
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1654,8 +1654,8 @@ static void powerStateTransitionToOff(const Event event)
             setPowerState(PowerState::off);
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1673,8 +1673,8 @@ static void powerStateGracefulTransitionToOff(const Event event)
             setPowerState(PowerState::on);
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1712,8 +1712,8 @@ static void powerStateCycleOff(const Event event)
             powerOn();
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1730,8 +1730,8 @@ static void powerStateTransitionToCycleOff(const Event event)
             powerCycleTimerStart();
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1750,8 +1750,8 @@ static void powerStateGracefulTransitionToCycleOff(const Event event)
             setPowerState(PowerState::on);
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
@@ -1775,8 +1775,8 @@ static void powerStateCheckForWarmReset(const Event event)
             beep(beepPowerFail);
             break;
         default:
-            std::cerr << "Host" << power_control::node << ": "
-                      << "No action taken.\n";
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "No action taken.");
             break;
     }
 }
