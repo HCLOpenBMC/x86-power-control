@@ -67,6 +67,10 @@ static std::string nmiButton;
 std::string node = "0";
 static bool sioDisabled = true;
 
+static bool multiNodePowerbuttonPressed = false;
+static bool multiNodeResetbuttonPressed = false;
+static int selectorSwitchPosition;
+
 static std::string hostName = "xyz.openbmc_project.State.Host";
 static std::string chassisName = "xyz.openbmc_project.State.Chassis";
 static std::string osName = "xyz.openbmc_project.State.OperatingSystem";
@@ -2216,6 +2220,67 @@ static int loadConfigValues()
     return 0;
 }
 
+inline static sdbusplus::bus::match::match
+    startPulseEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message &msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<int>> propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
+        int var = *variant;
+        int checkVar =10;
+        std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
+
+        if(event == "Position")
+        {
+            selectorSwitchPosition = var;
+        }
+        else if(event == "PowerButtonPressed" && var == 1)
+        {
+            if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+            {
+                std::cerr<<"Power Button Pressed\n";
+                powerButtonPressLog();
+                multiNodePowerbuttonPressed = false;
+                sendPowerControlEvent(Event::powerButtonPressed);
+                addRestartCause(RestartCause::powerButton);
+            }
+        }
+        else if(event == "ResetButtonPressed" && var == 1)
+        {
+            if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+            {
+                std::cerr<<"Reset Button Pressed\n";
+                resetButtonPressLog();
+                multiNodePowerbuttonPressed = false;
+ sendPowerControlEvent(Event::resetButtonPressed);
+                addRestartCause(RestartCause::resetButton);
+            }
+        }
+
+        if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus &>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='xyz.openbmc_project.Misc.Ipmi'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+
 } // namespace power_control
 
 int main(int argc, char* argv[])
@@ -2229,6 +2294,10 @@ int main(int argc, char* argv[])
 
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
+
+
+        sdbusplus::bus::match::match pulseEventMonitor =
+        power_control::startPulseEventMonitor(power_control::conn);
 
     if (std::stoi(power_control::node) > 0)
     {
