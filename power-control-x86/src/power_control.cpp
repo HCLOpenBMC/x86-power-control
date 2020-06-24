@@ -71,6 +71,17 @@ static bool multiNodePowerbuttonPressed = false;
 static bool multiNodeResetbuttonPressed = false;
 static int selectorSwitchPosition;
 
+static bool pwrGdStatusFromIPMI;
+static const uint8_t meAddress = 1;
+static int8_t netFn = 0x38;
+static constexpr uint8_t lun = 0;
+static uint8_t cmd = 3;
+std::vector<uint8_t> cmdData{0x15,0xa0,0};
+std::vector<uint8_t> respData:
+static constexpr uint8_t CPUPwrGdMask = 0x01;
+static constexpr uint8_t PCHPwrGdMask = 0x02;
+using respType = std::tuple<int, uint8_t, uint8_t, uint8_t, uint8_t, std::vector<uint8_t>>;
+
 static std::string hostName = "xyz.openbmc_project.State.Host";
 static std::string chassisName = "xyz.openbmc_project.State.Chassis";
 static std::string osName = "xyz.openbmc_project.State.OperatingSystem";
@@ -1787,13 +1798,20 @@ static void powerStateCheckForWarmReset(const Event event)
 
 static void psPowerOKHandler()
 {
-    gpiod::line_event gpioLineEvent = psPowerOKLine.event_read();
+    if(pwrOk.empty)
+    {
+        sendPowerGoodRequest();
+        Event powerControlEvent = pwrGdStatusFromIPMI ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+    }
+    else
+    {
+        gpiod::line_event gpioLineEvent = psPowerOKLine.event_read();
 
-    Event powerControlEvent =
-        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
-            ? Event::psPowerOKAssert
-            : Event::psPowerOKDeAssert;
-
+        Event powerControlEvent =
+            gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
+                ? Event::psPowerOKAssert
+                : Event::psPowerOKDeAssert;
+    }
     sendPowerControlEvent(powerControlEvent);
     psPowerOKEvent.async_wait(
         boost::asio::posix::stream_descriptor::wait_read,
@@ -2280,6 +2298,32 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
+int sendPowerGoodRequest()
+{
+    auto method = conn->new_method_call("xyz.openbmc_project.Ipmi.Channel.Ipmb",
+                                       "/xyz/openbmc_project/Ipmi/Channel/Ipmb",
+                                       "org.openbmc.Ipmb", "sendRequest");
+    method.append(meAddress, netFn, lun, cmd, cmdData);
+
+    auto reply = conn->call(method);
+    if (reply.is_method_error())
+    {        
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Error reading from ME");
+        return -1; 
+    }    
+
+    respType resp;
+    reply.read(resp);
+
+    respData = std::move(std::get<std::remove_reference_t<decltype(respData)>>(resp));
+
+    //uint8_t GpiosStatus = respData[3];
+   // pwrGdStatusFromIPMI = (GpiosStatus & CPUPwrGdMask) && (GpiosStatus & PCHPwrGdMask); 
+
+    return 0;
+
+}
 
 } // namespace power_control
 
@@ -2298,6 +2342,7 @@ int main(int argc, char* argv[])
 
         sdbusplus::bus::match::match pulseEventMonitor =
         power_control::startPulseEventMonitor(power_control::conn);
+
 
     if (std::stoi(power_control::node) > 0)
     {

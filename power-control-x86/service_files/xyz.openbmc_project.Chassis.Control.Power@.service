@@ -1,6 +1,8 @@
 [Unit]
 Description=Intel Power Control for the Chassis %i
 ConditionPathExists=/usr/share/power-control/power-config%i.json
+After=ipmb.service
+Wants=ipmb.service
 
 [Service]
 Restart=always
