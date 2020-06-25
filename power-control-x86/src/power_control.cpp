@@ -71,16 +71,6 @@ static bool multiNodePowerbuttonPressed = false;
 static bool multiNodeResetbuttonPressed = false;
 static int selectorSwitchPosition;
 
-uint8_t meAddress = 1;
-uint8_t netFn = 0x38;
-uint8_t lun = 0;
-uint8_t cmd = 3;
-std::vector<uint8_t> respData;
-static constexpr uint8_t CPUPwrGdMask = 0x01;
-static constexpr uint8_t PCHPwrGdMask = 0x02;
-std::vector<uint8_t> cmdData{0x15,0xa0,0};
-static bool pwrGdStatusFromIPMI;
-
 static std::string hostName = "xyz.openbmc_project.State.Host";
 static std::string chassisName = "xyz.openbmc_project.State.Chassis";
 static std::string osName = "xyz.openbmc_project.State.OperatingSystem";
@@ -168,34 +158,6 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "/xyz/openbmc_project/BeepCode",
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
-
-
-int sendPowerGoodRequest()
-{
-    auto method = conn->new_method_call("xyz.openbmc_project.Ipmi.Channel.Ipmb",
-                                       "/xyz/openbmc_project/Ipmi/Channel/Ipmb",
-                                       "org.openbmc.Ipmb", "sendRequest");
-    method.append(meAddress, netFn, lun, cmd, cmdData);
-
-    auto reply = conn->call(method);
-    if (reply.is_method_error())
-    {        
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Error reading from ME");
-        return -1; 
-    }    
-
-    std::tuple<int, uint8_t, uint8_t, uint8_t, uint8_t, std::vector<uint8_t>> resp;
-    reply.read(resp);
-
-    respData = std::move(std::get<std::remove_reference_t<decltype(respData)>>(resp));
-    uint8_t GpiosStatus = respData[3];
-    pwrGdStatusFromIPMI = (GpiosStatus & CPUPwrGdMask) && (GpiosStatus & PCHPwrGdMask); 
-
-    return 0;
-
-}
-
 
 enum class PowerState
 {
@@ -1825,22 +1787,13 @@ static void powerStateCheckForWarmReset(const Event event)
 
 static void psPowerOKHandler()
 {
-    Event powerControlEvent;
-    if(!pwrOk.empty())
-    {
-        sendPowerGoodRequest();
-        std::cerr<<  "Host" << power_control::node << ": " << "dharshan sendPowerGoodRequest value : "<< pwrGdStatusFromIPMI << "\n";
-        powerControlEvent = pwrGdStatusFromIPMI ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
-    }
-    else
-    {
-        gpiod::line_event gpioLineEvent = psPowerOKLine.event_read();
+    gpiod::line_event gpioLineEvent = psPowerOKLine.event_read();
 
-        powerControlEvent =
-            gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
-                ? Event::psPowerOKAssert
-                : Event::psPowerOKDeAssert;
-    }
+    Event powerControlEvent =
+        gpioLineEvent.event_type == gpiod::line_event::RISING_EDGE
+            ? Event::psPowerOKAssert
+            : Event::psPowerOKDeAssert;
+
     sendPowerControlEvent(powerControlEvent);
     psPowerOKEvent.async_wait(
         boost::asio::posix::stream_descriptor::wait_read,
@@ -2283,7 +2236,7 @@ inline static sdbusplus::bus::match::match
         auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
         int var = *variant;
         int checkVar =10;
-        //std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
+        std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
 
         if(event == "Position")
         {
@@ -2293,7 +2246,7 @@ inline static sdbusplus::bus::match::match
         {
             if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
             {
-                std::cerr<<"Power Button Pressed\n";
+                std::cerr<< "Host" << power_control::node << ": " <<  "Power Button Pressed\n";
                 powerButtonPressLog();
                 multiNodePowerbuttonPressed = false;
                 sendPowerControlEvent(Event::powerButtonPressed);
@@ -2304,15 +2257,24 @@ inline static sdbusplus::bus::match::match
         {
             if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
             {
-                std::cerr<<"Reset Button Pressed\n";
+                std::cerr<< "Host" << power_control::node << ": " <<  "Reset Button Pressed\n";
                 resetButtonPressLog();
                 multiNodePowerbuttonPressed = false;
- sendPowerControlEvent(Event::resetButtonPressed);
+                sendPowerControlEvent(Event::resetButtonPressed);
                 addRestartCause(RestartCause::resetButton);
             }
         }
-
-        if (event.empty())
+        else if((event == "POWER_GOOD1") && (std::stoi(power_control::node) == 1))
+        {
+            Event powerControlEvent = var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if((event == "POWER_GOOD2") && (std::stoi(power_control::node) == 2))
+        {
+            Event powerControlEvent = var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if (event.empty())
         {
             return;
         }
