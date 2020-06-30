@@ -2060,7 +2060,8 @@ static void postCompleteHandler()
 static int loadConfigValues()
 {
     const std::string configFilePath =
-        "/usr/share/power-control/power-config-host" + power_control::node + ".json";
+        "/usr/share/power-control/power-config-host" + power_control::node +
+        ".json";
     std::ifstream configFile(configFilePath.c_str());
     if (!configFile.is_open())
     {
@@ -2075,62 +2076,62 @@ static int loadConfigValues()
         return -1;
     }
 
-    if(data.contains("IdButton"))
+    if (data.contains("IdButton"))
     {
         idButtonName = data["IdButton"];
     }
 
-    if(data.contains("NMIButton"))
+    if (data.contains("NMIButton"))
     {
         nmiButtonName = data["NMIButton"];
     }
 
-    if(data.contains("NMIOut"))
+    if (data.contains("NMIOut"))
     {
         nmiOutName = data["NMIOut"];
     }
 
-    if(data.contains("PostComplete"))
+    if (data.contains("PostComplete"))
     {
         postCompleteName = data["PostComplete"];
     }
 
-    if(data.contains("PwrButton"))
+    if (data.contains("PwrButton"))
     {
         powerButtonName = data["PwrButton"];
     }
 
-    if(data.contains("PwrOK"))
+    if (data.contains("PwrOK"))
     {
         powerOkName = data["PwrOK"];
     }
 
-    if(data.contains("PwrOut"))
+    if (data.contains("PwrOut"))
     {
         powerOutName = data["PwrOut"];
     }
 
-    if(data.contains("RstButton"))
+    if (data.contains("RstButton"))
     {
         resetButtonName = data["RstButton"];
     }
 
-    if(data.contains("RstOut"))
+    if (data.contains("RstOut"))
     {
         resetOutName = data["RstOut"];
     }
 
-    if(data.contains("SIOOnCtl"))
+    if (data.contains("SIOOnCtl"))
     {
         sioOnControlName = data["SIOOnCtl"];
     }
 
-    if(data.contains("SIOPwrGd"))
+    if (data.contains("SIOPwrGd"))
     {
         sioPwrGoodName = data["SIOPwrGd"];
     }
 
-    if(data.contains("SIOS5"))
+    if (data.contains("SIOS5"))
     {
         sioS5Name = data["SIOS5"];
     }
@@ -2182,7 +2183,8 @@ int main(int argc, char* argv[])
     }
     else
     {
-        std::cerr<<"PowerOk Name should be configured from json config file\n";
+        std::cerr
+            << "PowerOk Name should be configured from json config file\n";
         return -1;
     }
 
