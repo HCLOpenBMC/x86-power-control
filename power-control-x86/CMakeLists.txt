@@ -34,7 +34,7 @@ set(
 
 set(
   CONFIG_FILE
-  ${PROJECT_SOURCE_DIR}/src/power-config0.json
+  ${PROJECT_SOURCE_DIR}/config/power-config-host0.json
   )
 
 install(FILES ${SERVICE_FILES} DESTINATION /lib/systemd/system/)
