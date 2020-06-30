@@ -2075,18 +2075,65 @@ static int loadConfigValues()
         return -1;
     }
 
-    idButtonName = data["IdButton"];
-    nmiButtonName = data["NMIButton"];
-    nmiOutName = data["NMIOut"];
-    postCompleteName = data["PostComplete"];
-    powerButtonName = data["PwrButton"];
-    powerOkName = data["PwrOK"];
-    powerOutName = data["PwrOut"];
-    resetButtonName = data["RstButton"];
-    resetOutName = data["RstOut"];
-    sioOnControlName = data["SIOOnCtl"];
-    sioPwrGoodName = data["SIOPwrGd"];
-    sioS5Name = data["SIOS5"];
+    if(data.contains("IdButton"))
+    {
+        idButtonName = data["IdButton"];
+    }
+
+    if(data.contains("NMIButton"))
+    {
+        nmiButtonName = data["NMIButton"];
+    }
+
+    if(data.contains("NMIOut"))
+    {
+        nmiOutName = data["NMIOut"];
+    }
+
+    if(data.contains("PostComplete"))
+    {
+        postCompleteName = data["PostComplete"];
+    }
+
+    if(data.contains("PwrButton"))
+    {
+        powerButtonName = data["PwrButton"];
+    }
+
+    if(data.contains("PwrOK"))
+    {
+        powerOkName = data["PwrOK"];
+    }
+
+    if(data.contains("PwrOut"))
+    {
+        powerOutName = data["PwrOut"];
+    }
+
+    if(data.contains("RstButton"))
+    {
+        resetButtonName = data["RstButton"];
+    }
+
+    if(data.contains("RstOut"))
+    {
+        resetOutName = data["RstOut"];
+    }
+
+    if(data.contains("SIOOnCtl"))
+    {
+        sioOnControlName = data["SIOOnCtl"];
+    }
+
+    if(data.contains("SIOPwrGd"))
+    {
+        sioPwrGoodName = data["SIOPwrGd"];
+    }
+
+    if(data.contains("SIOS5"))
+    {
+        sioS5Name = data["SIOS5"];
+    }
 
     return 0;
 }
@@ -2132,6 +2179,11 @@ int main(int argc, char* argv[])
         {
             return -1;
         }
+    }
+    else
+    {
+        std::cerr<<"PowerOk Name should be configured from json config file\n";
+        return -1;
     }
 
     if (power_control::sioDisabled == false)
