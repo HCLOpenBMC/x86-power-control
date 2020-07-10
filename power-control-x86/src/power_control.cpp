@@ -37,7 +37,6 @@ static boost::asio::io_service io;
 std::shared_ptr<sdbusplus::asio::connection> conn;
 
 static std::string node = "0";
-static bool sioDisabled = false;
 
 static std::string powerOutName;
 static std::string powerOkName;
@@ -2164,13 +2163,6 @@ int main(int argc, char* argv[])
     power_control::conn->request_name(
         "xyz.openbmc_project.Control.Host.RestartCause");
 
-    if (power_control::sioPwrGoodName.empty() &&
-        power_control::sioOnControlName.empty() &&
-        power_control::sioS5Name.empty())
-    {
-        power_control::sioDisabled = true;
-    }
-
     // Request PS_PWROK GPIO events
     if (!power_control::powerOkName.empty())
     {
@@ -2184,13 +2176,13 @@ int main(int argc, char* argv[])
     else
     {
         std::cerr
-            << "PowerOk Name should be configured from json config file\n";
+            << "PowerOk name should be configured from json config file\n";
         return -1;
     }
 
-    if (power_control::sioDisabled == false)
+    // Request SIO_POWER_GOOD GPIO events
+    if (!power_control::sioPwrGoodName.empty())
     {
-        // Request SIO_POWER_GOOD GPIO events
         if (!power_control::requestGPIOEvents(
                 power_control::sioPwrGoodName,
                 power_control::sioPowerGoodHandler,
@@ -2199,8 +2191,17 @@ int main(int argc, char* argv[])
         {
             return -1;
         }
+    }
+    else
+    {
+        std::cerr
+            << "sioPwrGood name should be configured from json config file\n";
+        return -1;
+    }
 
-        // Request SIO_ONCONTROL GPIO events
+    // Request SIO_ONCONTROL GPIO events
+    if (!power_control::sioOnControlName.empty())
+    {
         if (!power_control::requestGPIOEvents(
                 power_control::sioOnControlName,
                 power_control::sioOnControlHandler,
@@ -2209,14 +2210,29 @@ int main(int argc, char* argv[])
         {
             return -1;
         }
+    }
+    else
+    {
+        std::cerr
+            << "sioOnControl name should be configured from json config file\n";
+        return -1;
+    }
 
-        // Request SIO_S5 GPIO events
+    // Request SIO_S5 GPIO events
+    if (!power_control::sioS5Name.empty())
+    {
         if (!power_control::requestGPIOEvents(
                 power_control::sioS5Name, power_control::sioS5Handler,
                 power_control::sioS5Line, power_control::sioS5Event))
         {
             return -1;
         }
+    }
+    else
+    {
+        std::cerr
+            << "sioS5 name should be configured from json config file\n";
+        return -1;
     }
 
     // Request POWER_BUTTON GPIO events
@@ -2230,6 +2246,12 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
+    else
+    {
+        std::cerr
+            << "powerButton name should be configured from json config file\n";
+        return -1;
+    }
 
     // Request RESET_BUTTON GPIO events
     if (!power_control::resetButtonName.empty())
@@ -2241,6 +2263,12 @@ int main(int argc, char* argv[])
         {
             return -1;
         }
+    }
+    else
+    {
+        std::cerr
+            << "resetButton name should be configured from json config file\n";
+        return -1;
     }
 
     // Request NMI_BUTTON GPIO events
@@ -2270,6 +2298,12 @@ int main(int argc, char* argv[])
         {
             return -1;
         }
+    }
+    else
+    {
+        std::cerr
+            << "postComplete name should be configured from json config file\n";
+        return -1;
     }
 
     // initialize NMI_OUT GPIO.
