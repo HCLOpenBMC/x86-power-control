@@ -2230,8 +2230,7 @@ int main(int argc, char* argv[])
     }
     else
     {
-        std::cerr
-            << "sioS5 name should be configured from json config file\n";
+        std::cerr << "sioS5 name should be configured from json config file\n";
         return -1;
     }
 
