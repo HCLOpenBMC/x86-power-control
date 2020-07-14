@@ -2059,7 +2059,7 @@ static void postCompleteHandler()
 static int loadConfigValues()
 {
     const std::string configFilePath =
-        "/usr/share/power-control/power-config-host" + power_control::node +
+        "/usr/share/x86-power-control/power-config-host" + power_control::node +
         ".json";
     std::ifstream configFile(configFilePath.c_str());
     if (!configFile.is_open())
