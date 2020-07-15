@@ -1,15 +1,32 @@
 {
-  "IdButton": "ID_BUTTON",
-  "NMIButton": "NMI_BUTTON",
-  "NMIOut": "NMI_OUT",
-  "PostComplete": "POST_COMPLETE",
-  "PwrButton": "POWER_BUTTON",
-  "PwrOK": "PS_PWROK",
-  "PwrOut": "POWER_OUT",
-  "RstButton": "RESET_BUTTON",
-  "RstOut": "RESET_OUT",
-  "SIOOnCtl": "SIO_ONCONTROL",
-  "SIOPwrGd": "SIO_POWER_GOOD",
-  "SIOS5": "SIO_S5"
+	"gpio": [
+		{
+		  "PostComplete": "POST_COMPLETE",
+		  "PwrButton": "MULTI_HOST_POWER_BUTTON",
+		  "PwrOK": "PS_PWROK0",
+		  "PwrOut": "POWER_OUT0",
+		  "RstButton": "MULTI_HOST_RESET_BUTTON",
+		  "RstOut": "RESET_OUT"
+		}
+	],
+	"power-good": [
+		{
+			"BusName": "xyz.openbmc_project.Misc.Ipmi",
+			"property": "Power_Good1"
+		}
+	],
+	"power-button": [
+		{
+			"BusName": "xyz.openbmc_project.Misc.Ipmi",
+			"property": "PowerButtonPressed"
+		}
+	],
+	"reset-button": [
+		{
+			"BusName": "xyz.openbmc_project.Misc.Ipmi",
+			"property": "ResetButtonPressed"
+		}
+	]
+
 }
 
