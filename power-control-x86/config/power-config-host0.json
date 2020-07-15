@@ -12,19 +12,19 @@
 	"power-good": [
 		{
 			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"property": "Power_Good1"
+			"Property": "Power_Good1"
 		}
 	],
 	"power-button": [
 		{
 			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"property": "PowerButtonPressed"
+			"Property": "PowerButtonPressed"
 		}
 	],
 	"reset-button": [
 		{
 			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"property": "ResetButtonPressed"
+			"Property": "ResetButtonPressed"
 		}
 	]
 

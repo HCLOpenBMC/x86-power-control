@@ -2096,71 +2096,130 @@ static int loadConfigValues()
         return -1;
     }
     auto data = nlohmann::json::parse(configFile, nullptr);
-
     if (data.is_discarded())
     {
         std::cerr << "Power config readings JSON parser failure";
         return -1;
     }
 
-    if (data.contains("IdButton"))
-    {
-        idButtonName = data["IdButton"];
-    }
+    static const std::vector<Json> empty{};
+    std::vector<Json> gpioVec = data.value("gpio", empty);
+    std::vector<Json> powerGoodVec = data.value("power-good", empty);
+    std::vector<Json> powerButtonVec = data.value("power-button", empty);
+    std::vector<Json> ResetButtonVec = data.value("power-reset", empty);
 
-    if (data.contains("NMIButton"))
+    if(gpioVec.empty())
     {
-        nmiButtonName = data["NMIButton"];
-    }
+        for (const auto& instance : gpioVec)
+        {    
+            if (instance.contains("IdButton"))
+            {
+                idButtonName = instance["IdButton"];
+            }
 
-    if (data.contains("NMIOut"))
-    {
-        nmiOutName = data["NMIOut"];
-    }
+            if (instance.contains("NMIButton"))
+            {
+                nmiButtonName = instance["NMIButton"];
+            }
 
-    if (data.contains("PostComplete"))
-    {
-        postCompleteName = data["PostComplete"];
-    }
+            if (instance.contains("NMIOut"))
+            {
+                nmiOutName = instance["NMIOut"];
+            }
 
-    if (data.contains("PwrButton"))
-    {
-        powerButtonName = data["PwrButton"];
-    }
+            if (instance.contains("PostComplete"))
+            {
+                postCompleteName = instance["PostComplete"];
+            }
 
-    if (data.contains("PwrOK"))
-    {
-        powerOkName = data["PwrOK"];
-    }
+            if (instance.contains("PwrButton"))
+            {
+                powerButtonName = instance["PwrButton"];
+            }
 
-    if (data.contains("PwrOut"))
-    {
-        powerOutName = data["PwrOut"];
-    }
+            if (instance.contains("PwrOK"))
+            {
+                powerOkName = instance["PwrOK"];
+            }
 
-    if (data.contains("RstButton"))
-    {
-        resetButtonName = data["RstButton"];
-    }
+            if (instance.contains("PwrOut"))
+            {
+                powerOutName = instance["PwrOut"];
+            }
 
-    if (data.contains("RstOut"))
-    {
-        resetOutName = data["RstOut"];
-    }
+            if (instance.contains("RstButton"))
+            {
+                resetButtonName = instance["RstButton"];
+            }
 
-    if (data.contains("SIOOnCtl"))
-    {
-        sioOnControlName = data["SIOOnCtl"];
-    }
+            if (instance.contains("RstOut"))
+            {
+                resetOutName = instance["RstOut"];
+            }
 
-    if (data.contains("SIOPwrGd"))
-    {
-        sioPwrGoodName = data["SIOPwrGd"];
-    }
+            if (instance.contains("SIOOnCtl"))
+            {
+                sioOnControlName = instance["SIOOnCtl"];
+            }
 
-    if (data.contains("SIOS5"))
-    {
-        sioS5Name = data["SIOS5"];
+            if (instance.contains("SIOPwrGd"))
+            {
+                sioPwrGoodName = instance["SIOPwrGd"];
+            }
+
+            if (instance.contains("SIOS5"))
+            {
+                sioS5Name = instance["SIOS5"];
+            }
+        }
+        
+        if(powerButtonVec.empty())
+        {
+            for (const auto& instance : powerButtonVec)
+            {
+                if (instance.contains("BusName"))
+                {
+                    PowerButtonBusName = instance["BusName"];
+                }
+
+                if(instance.contains("Property"))
+                {
+                    PowerButtonProperty = instance["Property"];
+                }
+            }
+        }
+
+        if(ResetButtonVec.empty())
+        {
+            for (const auto& instance : ResetButtonVec)
+            {
+                if (instance.contains("BusName"))
+                {
+                    ResetButtonBusName = instance["BusName"];
+                }
+
+                if(instance.contains("Property"))
+                {
+                    ResetButtonProperty = instance["Property"];
+                }
+            }
+        }
+
+        if(powerGoodVec.empty())
+        {
+            for (const auto& instance : powerGoodVec)
+            {
+                if (instance.contains("BusName"))
+                {
+                    PowerGoodBusName = instance["BusName"];
+                }
+
+                if(instance.contains("Property"))
+                {
+                    PowerGoodProperty = instance["Property"];
+                }
+            }
+        }
     }
 
     return 0;
