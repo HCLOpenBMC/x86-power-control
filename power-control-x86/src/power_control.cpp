@@ -2111,10 +2111,10 @@ static int loadConfigValues()
     std::vector<Json> gpioVec = data.value("gpio", empty);
     std::vector<Json> dBusVec = data.value("dbus", empty);
 
-    if(gpioVec.empty())
+    if (gpioVec.empty())
     {
         for (const auto& instance : gpioVec)
-        {    
+        {
             if (instance.contains("IdButton"))
             {
                 idButtonName = instance["IdButton"];
@@ -2175,8 +2175,8 @@ static int loadConfigValues()
                 sioS5Name = instance["SIOS5"];
             }
         }
-        
-        if(dBusVec.empty())
+
+        if (dBusVec.empty())
         {
             for (const auto& instance : powerButtonVec)
             {
@@ -2185,35 +2185,35 @@ static int loadConfigValues()
                     dBbusName = instance["BusName"];
                 }
 
-                if(instance.contains("PowerGdEvent"))
+                if (instance.contains("PowerGdEvent"))
                 {
                     powerGdEvent = instance["PowerGdEvent"];
                 }
 
-                if(instance.contains("PwrButtonEvent"))
+                if (instance.contains("PwrButtonEvent"))
                 {
                     pwrButtonEvent = instance["PwrButtonEvent"];
                 }
 
-                if(instance.contains("RstButtonEvent"))
+                if (instance.contains("RstButtonEvent"))
                 {
                     rstButtonEvent = instance["RstButtonEvent"];
                 }
             }
         }
-
-       }
     }
-
-    return 0;
 }
+
+return 0;
+} // namespace power_control
 
 inline static sdbusplus::bus::match::match
     startPulseEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
 {
-        auto pulseEventMatcherCallback = [](sdbusplus::message::message &msg) {
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
-        boost::container::flat_map<std::string, std::variant<int>> propertiesChanged;
+        boost::container::flat_map<std::string, std::variant<int>>
+            propertiesChanged;
         msg.read(thresholdInterface, propertiesChanged);
 
         if (propertiesChanged.empty())
@@ -2223,35 +2223,43 @@ inline static sdbusplus::bus::match::match
         std::string event = propertiesChanged.begin()->first;
         auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
         int var = *variant;
-        std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
+        std::cerr << "Host" << power_control::node << ": "
+                  << "Event :" << event << "  Varient :" << var << "\n";
 
-        if(event == )
+        if (event ==)
         {
             selectorSwitchPosition = var;
         }
-        else if(event == pwrButtonEvent && var == 1)
+        else if (event == pwrButtonEvent && var == 1)
         {
-            if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+            if ((std::stoi(power_control::node) == selectorSwitchPosition) ||
+                ((std::stoi(power_control::node) + 5) ==
+                 selectorSwitchPosition))
             {
-                std::cerr<< "Host" << power_control::node << ": " <<  "Power Button Pressed\n";
+                std::cerr << "Host" << power_control::node << ": "
+                          << "Power Button Pressed\n";
                 powerButtonPressLog();
                 sendPowerControlEvent(Event::powerButtonPressed);
                 addRestartCause(RestartCause::powerButton);
             }
         }
-        else if(event == rstButtonEvent && var == 1)
+        else if (event == rstButtonEvent && var == 1)
         {
-            if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+            if ((std::stoi(power_control::node) == selectorSwitchPosition) ||
+                ((std::stoi(power_control::node) + 5) ==
+                 selectorSwitchPosition))
             {
-                std::cerr<< "Host" << power_control::node << ": " <<  "Reset Button Pressed\n";
+                std::cerr << "Host" << power_control::node << ": "
+                          << "Reset Button Pressed\n";
                 resetButtonPressLog();
                 sendPowerControlEvent(Event::resetButtonPressed);
                 addRestartCause(RestartCause::resetButton);
             }
         }
-        else if((event == powerGdEvent))
+        else if ((event == powerGdEvent))
         {
-            Event powerControlEvent = var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+            Event powerControlEvent =
+                var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
             sendPowerControlEvent(powerControlEvent);
         }
         else if (event.empty())
@@ -2261,13 +2269,13 @@ inline static sdbusplus::bus::match::match
     };
 
     sdbusplus::bus::match::match pulseEventMatcher(
-        static_cast<sdbusplus::bus::bus &>(*conn),
+        static_cast<sdbusplus::bus::bus&>(*conn),
         "type='signal',interface='org.freedesktop.DBus.Properties',member='"
         "PropertiesChanged',arg0namespace='xyz.openbmc_project.Misc.Ipmi'",
         std::move(pulseEventMatcherCallback));
 
     return pulseEventMatcher;
-    }
+}
 
 } // namespace power_control
 
