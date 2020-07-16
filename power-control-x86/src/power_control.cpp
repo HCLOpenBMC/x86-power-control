@@ -2094,7 +2094,8 @@ static void postCompleteHandler()
 static int loadConfigValues()
 {
     const std::string configFilePath =
-        "/usr/share/x86-power-control/power-config-host" + power_control::node + ".json";
+        "/usr/share/x86-power-control/power-config-host" + power_control::node +
+        ".json";
     std::ifstream configFile(configFilePath.c_str());
     if (!configFile.is_open())
     {
@@ -2204,8 +2205,8 @@ static int loadConfigValues()
         }
     }
 
-return 0;
-} 
+    return 0;
+}
 
 inline static sdbusplus::bus::match::match
     startPulseEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
@@ -2228,19 +2229,19 @@ inline static sdbusplus::bus::match::match
 
         if (event == pwrButtonEvent && var == 1)
         {
-                std::cerr << "Host" << power_control::node << ": "
-                          << "Power Button Pressed\n";
+            std::cerr << "Host" << power_control::node << ": "
+                      << "Power Button Pressed\n";
             //    powerButtonPressLog();
-             //   sendPowerControlEvent(Event::powerButtonPressed);
-              //  addRestartCause(RestartCause::powerButton);
+            //   sendPowerControlEvent(Event::powerButtonPressed);
+            //  addRestartCause(RestartCause::powerButton);
         }
         else if (event == rstButtonEvent && var == 1)
         {
-                std::cerr << "Host" << power_control::node << ": "
-                          << "Reset Button Pressed\n";
-        //        resetButtonPressLog();
-         //       sendPowerControlEvent(Event::resetButtonPressed);
-          //      addRestartCause(RestartCause::resetButton);
+            std::cerr << "Host" << power_control::node << ": "
+                      << "Reset Button Pressed\n";
+            //        resetButtonPressLog();
+            //       sendPowerControlEvent(Event::resetButtonPressed);
+            //      addRestartCause(RestartCause::resetButton);
         }
         else if ((event == powerGdEvent))
         {
@@ -2306,7 +2307,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if(power_control::powerGdEvent.empty()) 
+    else if (power_control::powerGdEvent.empty())
     {
         std::cerr
             << "PowerOk name should be configured from json config file\n";
@@ -2355,7 +2356,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if(power_control::pwrButtonEvent.empty())
+    else if (power_control::pwrButtonEvent.empty())
     {
         std::cerr
             << "powerButton name should be configured from json config file\n";
@@ -2373,7 +2374,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if(power_control::rstButtonEvent.empty())
+    else if (power_control::rstButtonEvent.empty())
     {
         std::cerr
             << "resetButton name should be configured from json config file\n";
