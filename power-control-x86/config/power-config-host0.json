@@ -9,22 +9,12 @@
 		  "RstOut": "RESET_OUT"
 		}
 	],
-	"power-good": [
+	"dbus": [
 		{
 			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"Property": "Power_Good1"
-		}
-	],
-	"power-button": [
-		{
-			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"Property": "PowerButtonPressed"
-		}
-	],
-	"reset-button": [
-		{
-			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"Property": "ResetButtonPressed"
+			"PowerGdEvent": "Power_GOOD1",
+			"PwrButtonEvent": "ResetButtonPressed",
+			"RstButtonEvent": "ResetButtonPressed"
 		}
 	]
 

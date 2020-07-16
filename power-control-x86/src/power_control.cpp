@@ -51,6 +51,11 @@ static std::string resetButtonName;
 static std::string idButtonName;
 static std::string nmiButtonName;
 
+static std::string pwrButtonEvent;
+static std::string rstButtonEvent;
+static std::string powerGdEvent;
+static std::string dBusName;
+
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSysIface;
@@ -2104,9 +2109,7 @@ static int loadConfigValues()
 
     static const std::vector<Json> empty{};
     std::vector<Json> gpioVec = data.value("gpio", empty);
-    std::vector<Json> powerGoodVec = data.value("power-good", empty);
-    std::vector<Json> powerButtonVec = data.value("power-button", empty);
-    std::vector<Json> ResetButtonVec = data.value("power-reset", empty);
+    std::vector<Json> dBusVec = data.value("dbus", empty);
 
     if(gpioVec.empty())
     {
@@ -2173,57 +2176,98 @@ static int loadConfigValues()
             }
         }
         
-        if(powerButtonVec.empty())
+        if(dBusVec.empty())
         {
             for (const auto& instance : powerButtonVec)
             {
                 if (instance.contains("BusName"))
                 {
-                    PowerButtonBusName = instance["BusName"];
+                    dBbusName = instance["BusName"];
                 }
 
-                if(instance.contains("Property"))
+                if(instance.contains("PowerGdEvent"))
                 {
-                    PowerButtonProperty = instance["Property"];
+                    powerGdEvent = instance["PowerGdEvent"];
+                }
+
+                if(instance.contains("PwrButtonEvent"))
+                {
+                    pwrButtonEvent = instance["PwrButtonEvent"];
+                }
+
+                if(instance.contains("RstButtonEvent"))
+                {
+                    rstButtonEvent = instance["RstButtonEvent"];
                 }
             }
         }
 
-        if(ResetButtonVec.empty())
-        {
-            for (const auto& instance : ResetButtonVec)
-            {
-                if (instance.contains("BusName"))
-                {
-                    ResetButtonBusName = instance["BusName"];
-                }
-
-                if(instance.contains("Property"))
-                {
-                    ResetButtonProperty = instance["Property"];
-                }
-            }
-        }
-
-        if(powerGoodVec.empty())
-        {
-            for (const auto& instance : powerGoodVec)
-            {
-                if (instance.contains("BusName"))
-                {
-                    PowerGoodBusName = instance["BusName"];
-                }
-
-                if(instance.contains("Property"))
-                {
-                    PowerGoodProperty = instance["Property"];
-                }
-            }
-        }
+       }
     }
 
     return 0;
 }
+
+inline static sdbusplus::bus::match::match
+    startPulseEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+        auto pulseEventMatcherCallback = [](sdbusplus::message::message &msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<int>> propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
+        int var = *variant;
+        std::cerr << "Host" << power_control::node << ": " <<  "Event :" << event << "  Varient :" <<var << "\n";
+
+        if(event == )
+        {
+            selectorSwitchPosition = var;
+        }
+        else if(event == pwrButtonEvent && var == 1)
+        {
+            if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+            {
+                std::cerr<< "Host" << power_control::node << ": " <<  "Power Button Pressed\n";
+                powerButtonPressLog();
+                sendPowerControlEvent(Event::powerButtonPressed);
+                addRestartCause(RestartCause::powerButton);
+            }
+        }
+        else if(event == rstButtonEvent && var == 1)
+        {
+            if((std::stoi(power_control::node) == selectorSwitchPosition ) || ((std::stoi(power_control::node)+5) == selectorSwitchPosition))
+            {
+                std::cerr<< "Host" << power_control::node << ": " <<  "Reset Button Pressed\n";
+                resetButtonPressLog();
+                sendPowerControlEvent(Event::resetButtonPressed);
+                addRestartCause(RestartCause::resetButton);
+            }
+        }
+        else if((event == powerGdEvent))
+        {
+            Event powerControlEvent = var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus &>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='xyz.openbmc_project.Misc.Ipmi'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+    }
 
 } // namespace power_control
 
