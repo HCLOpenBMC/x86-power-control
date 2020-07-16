@@ -55,6 +55,7 @@ static std::string nmiButtonName;
 
 static std::string pwrButtonEvent;
 static std::string rstButtonEvent;
+static std::string postComplEvent;
 static std::string powerGdEvent;
 static std::string dBusName;
 
@@ -2113,7 +2114,7 @@ static int loadConfigValues()
     std::vector<Json> gpioVec = data.value("gpio", empty);
     std::vector<Json> dBusVec = data.value("dbus", empty);
 
-    if (gpioVec.empty())
+    if (!gpioVec.empty())
     {
         for (const auto& instance : gpioVec)
         {
@@ -2178,7 +2179,7 @@ static int loadConfigValues()
             }
         }
 
-        if (dBusVec.empty())
+        if (!dBusVec.empty())
         {
             for (const auto& instance : dBusVec)
             {
@@ -2200,6 +2201,11 @@ static int loadConfigValues()
                 if (instance.contains("RstButtonEvent"))
                 {
                     rstButtonEvent = instance["RstButtonEvent"];
+                }
+
+                if (instance.contains("PostComlEvent"))
+                {
+                    postComplEvent = instance["PostComplEvent"];
                 }
             }
         }
@@ -2278,6 +2284,9 @@ int main(int argc, char* argv[])
         std::cerr << "Host" << power_control::node << ": "
                   << "Error in Parsing...\n";
     }
+
+
+    std::cerr << "Start Chassi  " << power_control::powerOkName << " " << power_control::powerOutName << " and Event " << power_control::powerGdEvent <<  " \n";
 
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
@@ -2409,7 +2418,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::postComplEvent.empty())
     {
         std::cerr
             << "postComplete name should be configured from json config file\n";

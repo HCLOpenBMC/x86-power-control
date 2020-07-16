@@ -1,22 +1,18 @@
 {
-	"gpio": [
-		{
-		  "PostComplete": "POST_COMPLETE",
-		  "PwrButton": "MULTI_HOST_POWER_BUTTON",
-		  "PwrOK": "PS_PWROK0",
-		  "PwrOut": "POWER_OUT0",
-		  "RstButton": "MULTI_HOST_RESET_BUTTON",
-		  "RstOut": "RESET_OUT"
-		}
-	],
-	"dbus": [
-		{
-			"BusName": "xyz.openbmc_project.Misc.Ipmi",
-			"PowerGdEvent": "Power_GOOD1",
-			"PwrButtonEvent": "ResetButtonPressed",
-			"RstButtonEvent": "ResetButtonPressed"
-		}
-	]
-
+    "gpio" :
+        [ {
+            "PostComplete" : "POST_COMPLETE",
+            "PwrButton" : "MULTI_HOST_POWER_BUTTON",
+            "PwrOK" : "PS_PWROK0",
+            "PwrOut" : "POWER_OUT0",
+            "RstButton" : "MULTI_HOST_RESET_BUTTON",
+            "RstOut" : "RESET_OUT"
+        } ],
+        "dbus" : [ {
+            "BusName" : "xyz.openbmc_project.Misc.Ipmi",
+            "PowerGdEvent" : "Power_GOOD1",
+            "PwrButtonEvent" : "ResetButtonPressed",
+            "RstButtonEvent" : "ResetButtonPressed",
+			"PostComplEvent" : "POST_COMPLETE"
+        } ]
 }
-
