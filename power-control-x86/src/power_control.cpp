@@ -2203,7 +2203,7 @@ static int loadConfigValues()
                     rstButtonEvent = instance["RstButtonEvent"];
                 }
 
-                if (instance.contains("PostComlEvent"))
+                if (instance.contains("PostComplEvent"))
                 {
                     postComplEvent = instance["PostComplEvent"];
                 }
@@ -2233,24 +2233,26 @@ inline static sdbusplus::bus::match::match
         std::cerr << "Host" << power_control::node << ": "
                   << "Event :" << event << "  Varient :" << var << "\n";
 
-        if (event == pwrButtonEvent && var == 1)
+        if (event == pwrButtonEvent)
         {
             std::cerr << "Host" << power_control::node << ": "
                       << "Power Button Pressed\n";
-            //    powerButtonPressLog();
-            //   sendPowerControlEvent(Event::powerButtonPressed);
-            //  addRestartCause(RestartCause::powerButton);
+            powerButtonPressLog();
+            sendPowerControlEvent(Event::powerButtonPressed);
+            addRestartCause(RestartCause::powerButton);
         }
-        else if (event == rstButtonEvent && var == 1)
+        else if (event == rstButtonEvent)
         {
             std::cerr << "Host" << power_control::node << ": "
                       << "Reset Button Pressed\n";
-            //        resetButtonPressLog();
-            //       sendPowerControlEvent(Event::resetButtonPressed);
-            //      addRestartCause(RestartCause::resetButton);
+            resetButtonPressLog();
+            sendPowerControlEvent(Event::resetButtonPressed);
+            addRestartCause(RestartCause::resetButton);
         }
         else if ((event == powerGdEvent))
         {
+            std::cerr << "Host" << power_control::node << ": "
+                      << "PowerGood Event\n";
             Event powerControlEvent =
                 var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
             sendPowerControlEvent(powerControlEvent);
@@ -2284,9 +2286,6 @@ int main(int argc, char* argv[])
         std::cerr << "Host" << power_control::node << ": "
                   << "Error in Parsing...\n";
     }
-
-
-    std::cerr << "Start Chassi  " << power_control::powerOkName << " " << power_control::powerOutName << " and Event " << power_control::powerGdEvent <<  " \n";
 
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
@@ -2418,7 +2417,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if(power_control::postComplEvent.empty())
+    else if (power_control::postComplEvent.empty())
     {
         std::cerr
             << "postComplete name should be configured from json config file\n";
@@ -2613,91 +2612,99 @@ int main(int argc, char* argv[])
     sdbusplus::asio::object_server buttonsServer =
         sdbusplus::asio::object_server(power_control::conn);
 
-    // Power Button Interface
-    power_control::powerButtonIface = buttonsServer.add_interface(
-        "/xyz/openbmc_project/chassis/buttons/power",
-        "xyz.openbmc_project.Chassis.Buttons");
+    if (power_control::powerButtonLine)
+    {
+        // Power Button Interface
+        power_control::powerButtonIface = buttonsServer.add_interface(
+            "/xyz/openbmc_project/chassis/buttons/power",
+            "xyz.openbmc_project.Chassis.Buttons");
 
-    power_control::powerButtonIface->register_property(
-        "ButtonMasked", false, [](const bool requested, bool& current) {
-            if (requested)
-            {
-                if (power_control::powerButtonMask)
+        power_control::powerButtonIface->register_property(
+            "ButtonMasked", false, [](const bool requested, bool& current) {
+                if (requested)
                 {
-                    return 1;
+                    if (power_control::powerButtonMask)
+                    {
+                        return 1;
+                    }
+                    if (!power_control::setGPIOOutput(
+                            power_control::powerOutName, 1,
+                            power_control::powerButtonMask))
+                    {
+                        throw std::runtime_error("Failed to request GPIO");
+                        return 0;
+                    }
+                    std::cerr << "Power Button Masked.\n";
                 }
-                if (!power_control::setGPIOOutput(
-                        power_control::powerOutName, 1,
-                        power_control::powerButtonMask))
+                else
                 {
-                    throw std::runtime_error("Failed to request GPIO");
-                    return 0;
+                    if (!power_control::powerButtonMask)
+                    {
+                        return 1;
+                    }
+                    std::cerr << "Power Button Un-masked\n";
+                    power_control::powerButtonMask.reset();
                 }
-                std::cerr << "Power Button Masked.\n";
-            }
-            else
-            {
-                if (!power_control::powerButtonMask)
+                // Update the mask setting
+                current = requested;
+                return 1;
+            });
+
+        // Check power button state
+        bool powerButtonPressed =
+            power_control::powerButtonLine.get_value() == 0;
+        power_control::powerButtonIface->register_property("ButtonPressed",
+                                                           powerButtonPressed);
+
+        power_control::powerButtonIface->initialize();
+    }
+
+    if (power_control::resetButtonLine)
+    {
+        // Reset Button Interface
+        power_control::resetButtonIface = buttonsServer.add_interface(
+            "/xyz/openbmc_project/chassis/buttons/reset",
+            "xyz.openbmc_project.Chassis.Buttons");
+
+        power_control::resetButtonIface->register_property(
+            "ButtonMasked", false, [](const bool requested, bool& current) {
+                if (requested)
                 {
-                    return 1;
+                    if (power_control::resetButtonMask)
+                    {
+                        return 1;
+                    }
+                    if (!power_control::setGPIOOutput(
+                            power_control::resetOutName, 1,
+                            power_control::resetButtonMask))
+                    {
+                        throw std::runtime_error("Failed to request GPIO");
+                        return 0;
+                    }
+                    std::cerr << "Reset Button Masked.\n";
                 }
-                std::cerr << "Power Button Un-masked\n";
-                power_control::powerButtonMask.reset();
-            }
-            // Update the mask setting
-            current = requested;
-            return 1;
-        });
-
-    // Check power button state
-    bool powerButtonPressed = power_control::powerButtonLine.get_value() == 0;
-    power_control::powerButtonIface->register_property("ButtonPressed",
-                                                       powerButtonPressed);
-
-    power_control::powerButtonIface->initialize();
-
-    // Reset Button Interface
-    power_control::resetButtonIface = buttonsServer.add_interface(
-        "/xyz/openbmc_project/chassis/buttons/reset",
-        "xyz.openbmc_project.Chassis.Buttons");
-
-    power_control::resetButtonIface->register_property(
-        "ButtonMasked", false, [](const bool requested, bool& current) {
-            if (requested)
-            {
-                if (power_control::resetButtonMask)
+                else
                 {
-                    return 1;
+                    if (!power_control::resetButtonMask)
+                    {
+                        return 1;
+                    }
+                    std::cerr << "Reset Button Un-masked\n";
+                    power_control::resetButtonMask.reset();
                 }
-                if (!power_control::setGPIOOutput(
-                        power_control::resetOutName, 1,
-                        power_control::resetButtonMask))
-                {
-                    throw std::runtime_error("Failed to request GPIO");
-                    return 0;
-                }
-                std::cerr << "Reset Button Masked.\n";
-            }
-            else
-            {
-                if (!power_control::resetButtonMask)
-                {
-                    return 1;
-                }
-                std::cerr << "Reset Button Un-masked\n";
-                power_control::resetButtonMask.reset();
-            }
-            // Update the mask setting
-            current = requested;
-            return 1;
-        });
+                // Update the mask setting
+                current = requested;
+                return 1;
+            });
 
-    // Check reset button state
-    bool resetButtonPressed = power_control::resetButtonLine.get_value() == 0;
-    power_control::resetButtonIface->register_property("ButtonPressed",
-                                                       resetButtonPressed);
+        // Check reset button state
+        bool resetButtonPressed =
+            power_control::resetButtonLine.get_value() == 0;
+        power_control::resetButtonIface->register_property("ButtonPressed",
+                                                           resetButtonPressed);
 
-    power_control::resetButtonIface->initialize();
+        power_control::resetButtonIface->initialize();
+    }
 
     if (power_control::nmiButtonLine)
     {
