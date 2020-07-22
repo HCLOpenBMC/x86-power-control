@@ -2280,6 +2280,9 @@ int main(int argc, char* argv[])
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
 
+    sdbusplus::bus::match::match pulseEventMonitor =
+    power_control::startPulseEventMonitor(power_control::conn);
+
     // Load GPIO's through json config file
     if (power_control::loadConfigValues() == -1)
     {

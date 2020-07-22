@@ -1,14 +1,13 @@
 {
     "gpio" :
         [ {
-            "PwrOK" : "PS_PWROK0",
             "PwrOut" : "POWER_OUT0",
             "RstOut" : "RESET_OUT0",
             "PostComplete": "POST_COMPLETE"
         } ],
         "dbus" : [ {
             "BusName" : "xyz.openbmc_project.Misc.Ipmi",
-            "PowerGdEvent" : "Power_GOOD1",
+            "PowerGdEvent" : "Power_Good1",
             "PwrButtonEvent" : "ResetButtonPressed",
             "RstButtonEvent" : "ResetButtonPressed",
 			"PostComplEvent" : "POST_COMPLETE"
