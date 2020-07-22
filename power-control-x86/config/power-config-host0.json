@@ -2,8 +2,7 @@
     "gpio" :
         [ {
             "PwrOut" : "POWER_OUT0",
-            "RstOut" : "RESET_OUT0",
-            "PostComplete": "POST_COMPLETE"
+            "RstOut" : "RESET_OUT0"
         } ],
         "dbus" : [ {
             "BusName" : "xyz.openbmc_project.Misc.Ipmi",

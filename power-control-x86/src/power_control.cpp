@@ -1360,6 +1360,8 @@ static void currentHostStateMonitor()
             else
             {
                 pohCounterTimer.cancel();
+                if(postCompleteLine)
+                {
                 // POST_COMPLETE GPIO event is not working in some platforms
                 // when power state is changed to OFF. This resulted in
                 // 'OperatingSystemState' to stay at 'Standby', even though
@@ -1367,6 +1369,8 @@ static void currentHostStateMonitor()
                 // if HostState is trurned to OFF.
                 osIface->set_property("OperatingSystemState",
                                       std::string("Inactive"));
+
+                }
 
                 // Set the restart cause set for this restart
                 setRestartCause();
@@ -2448,10 +2452,14 @@ int main(int argc, char* argv[])
 
     // Initialize the power state
     power_control::powerState = power_control::PowerState::off;
-    // Check power good
-    if (power_control::psPowerOKLine.get_value() > 0)
+    
+    if(power_control::psPowerOKLine)
     {
-        power_control::powerState = power_control::PowerState::on;
+        // Check power good
+        if (power_control::psPowerOKLine.get_value() > 0)
+        {
+            power_control::powerState = power_control::PowerState::on;
+        }
     }
 
     // Initialize the power state storage
@@ -2776,26 +2784,29 @@ int main(int argc, char* argv[])
         power_control::idButtonIface->initialize();
     }
 
-    // OS State Service
-    sdbusplus::asio::object_server osServer =
-        sdbusplus::asio::object_server(power_control::conn);
+    if(power_control::postCompleteLine)
+    {
+        // OS State Service
+        sdbusplus::asio::object_server osServer =
+            sdbusplus::asio::object_server(power_control::conn);
 
-    // OS State Interface
-    power_control::osIface = osServer.add_interface(
-        "/xyz/openbmc_project/state/os",
-        "xyz.openbmc_project.State.OperatingSystem.Status");
+        // OS State Interface
+        power_control::osIface = osServer.add_interface(
+            "/xyz/openbmc_project/state/os",
+            "xyz.openbmc_project.State.OperatingSystem.Status");
 
-    // Get the initial OS state based on POST complete
-    //      0: Asserted, OS state is "Standby" (ready to boot)
-    //      1: De-Asserted, OS state is "Inactive"
-    std::string osState = power_control::postCompleteLine.get_value() > 0
-                              ? "Inactive"
-                              : "Standby";
+        // Get the initial OS state based on POST complete
+        //      0: Asserted, OS state is "Standby" (ready to boot)
+        //      1: De-Asserted, OS state is "Inactive"
+        std::string osState = power_control::postCompleteLine.get_value() > 0
+                                  ? "Inactive"
+                                  : "Standby";
 
-    power_control::osIface->register_property("OperatingSystemState",
-                                              std::string(osState));
+        power_control::osIface->register_property("OperatingSystemState",
+                                                  std::string(osState));
 
-    power_control::osIface->initialize();
+        power_control::osIface->initialize();
+    }
 
     // Restart Cause Service
     sdbusplus::asio::object_server restartCauseServer =
