@@ -50,6 +50,7 @@ static std::string powerButtonName;
 static std::string resetButtonName;
 static std::string idButtonName;
 static std::string nmiButtonName;
+static std::string slotACPowerName;
 
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
@@ -227,6 +228,7 @@ enum class Event
     powerOffRequest,
     powerCycleRequest,
     resetRequest,
+    slotACPowerOnRequest,
     gracefulPowerOffRequest,
     gracefulPowerCycleRequest,
     warmResetDetected,
@@ -288,6 +290,9 @@ static std::string getEventName(Event event)
             break;
         case Event::resetRequest:
             return "reset request";
+            break;
+        case Event:slotACPowerOnRequest:
+            return "slot AC Power-on request";
             break;
         case Event::gracefulPowerOffRequest:
             return "graceful power-off request";
@@ -1085,6 +1090,35 @@ static void powerOn()
     setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
 }
 
+static void slotACPowerOn()
+{
+    // Find the GPIO line
+    gpiod::line gpioLine = gpiod::find_line(power_control::slotACPowerName);
+    if (!gpioLine)
+    {
+        std::cerr << "Failed to find the " << name << " line.\n";
+        return false;
+    }
+    gpioLine.set_value(1);
+    powerOn();
+
+}
+
+static void slotACPowerOff()
+{
+    // Find the GPIO line
+    gpiod::line gpioLine = gpiod::find_line(power_control::slotACPowerName);
+    if (!gpioLine)
+    {
+        std::cerr << "Failed to find the " << name << " line.\n";
+        return false;
+    }
+    gpioLine.set_value(1);
+    powerOn();
+
+}
+
+
 static void gracefulPowerOff()
 {
     setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
@@ -1540,6 +1574,9 @@ static void powerStateOff(const Event event)
             psPowerOKWatchdogTimerStart();
             setPowerState(PowerState::waitForPSPowerOK);
             powerOn();
+            break;
+        case Event::slotACPowerCycleRequest:
+            slotACPowerCycle();
             break;
         default:
             phosphor::logging::log<phosphor::logging::level::INFO>(
@@ -2138,6 +2175,11 @@ static int loadConfigValues()
         sioS5Name = data["SIOS5"];
     }
 
+    if (data.contains("SlotACPower"))
+    {
+        slotACPowerName = data["SlotACPower"];
+    }
+
     return 0;
 }
 
@@ -2414,7 +2456,7 @@ int main(int argc, char* argv[])
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                sendPowerControlEvent(power_control::Event::powerOnRequest);
+                sendPowerControlEvent(power_control::Event::slotACPowerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
