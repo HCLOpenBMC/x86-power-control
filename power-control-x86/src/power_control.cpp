@@ -145,12 +145,14 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
 
+#ifdef SLOT_AC
 enum class SlotACPowerState
 {
     on,
     off,
 };
 static SlotACPowerState slotACPowerState;
+#endif
 
 enum class PowerState
 {
@@ -1093,6 +1095,7 @@ static void powerOn()
     setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
 }
 
+#ifdef SLOT_AC
 static void slotACPowerOn()
 {
     slotACPowerLine.set_value(1);
@@ -1103,7 +1106,7 @@ static void slotACPowerOff()
     slotACPowerLine.set_value(0);
     setPowerState(PowerState::off);
 }
-
+#endif
 
 static void gracefulPowerOff()
 {
@@ -1546,7 +1549,7 @@ static void powerStateOff(const Event event)
             }
             break;
         }
-       case Event::sioS5DeAssert:
+        case Event::sioS5DeAssert:
             setPowerState(PowerState::waitForPSPowerOK);
             break;
         case Event::sioPowerGoodAssert:
@@ -2158,10 +2161,12 @@ static int loadConfigValues()
         sioS5Name = data["SIOS5"];
     }
 
+#ifdef SLOT_AC
     if (data.contains("SlotACPower"))
     {
         slotACPowerName = data["SlotACPower"];
     }
+#endif
 
     return 0;
 }
@@ -2345,18 +2350,22 @@ int main(int argc, char* argv[])
         power_control::powerState = power_control::PowerState::on;
     }
 
+#ifdef SLOT_AC
     // Initialize the power slot state
     power_control::slotACPowerState = power_control::SlotACPowerState::off;
-    power_control::slotACPowerLine = gpiod::find_line(power_control::slotACPowerName);
+    power_control::slotACPowerLine =
+        gpiod::find_line(power_control::slotACPowerName);
     if (!power_control::slotACPowerLine)
     {
-        std::cerr << "Failed to find the " << power_control::slotACPowerName << " line.\n";
+        std::cerr << "Failed to find the " << power_control::slotACPowerName
+                  << " line.\n";
         return -1;
     }
     else if (power_control::slotACPowerLine.get_value() > 0)
     {
         power_control::slotACPowerState = power_control::SlotACPowerState::on;
     }
+#endif
 
     // Initialize the power state storage
     if (power_control::initializePowerStateStorage() < 0)
@@ -2447,15 +2456,17 @@ int main(int argc, char* argv[])
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
 #ifdef SLOT_AC
-                if (power_control::slotACPowerState == power_control::SlotACPowerState::off)
+                if (power_control::slotACPowerState ==
+                    power_control::SlotACPowerState::off)
                 {
                     std::cerr << "Slot Ac Power is already in 'Off' state\n";
                 }
                 else
                 {
-                   power_control::slotACPowerOff();
-                   power_control::slotACPowerState = power_control::SlotACPowerState::off;
-                   std::cerr << "Slot Ac Power is switched Off\n";
+                    power_control::slotACPowerOff();
+                    power_control::slotACPowerState =
+                        power_control::SlotACPowerState::off;
+                    std::cerr << "Slot Ac Power is switched Off\n";
                 }
 #else
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
@@ -2466,15 +2477,17 @@ int main(int argc, char* argv[])
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
 #ifdef SLOT_AC
-                if (power_control::slotACPowerState == power_control::SlotACPowerState::on) 
+                if (power_control::slotACPowerState ==
+                    power_control::SlotACPowerState::on)
                 {
                     std::cerr << "Slot Ac Power is already in 'On' state\n";
                 }
                 else
                 {
-                   power_control::slotACPowerOn();
-                   power_control::slotACPowerState = power_control::SlotACPowerState::on;
-                   std::cerr << "Slot Ac Power is switched On\n";
+                    power_control::slotACPowerOn();
+                    power_control::slotACPowerState =
+                        power_control::SlotACPowerState::on;
+                    std::cerr << "Slot Ac Power is switched On\n";
                 }
 #else
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
