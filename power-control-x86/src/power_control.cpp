@@ -124,7 +124,7 @@ static boost::asio::posix::stream_descriptor idButtonEvent(io);
 static gpiod::line postCompleteLine;
 static boost::asio::posix::stream_descriptor postCompleteEvent(io);
 static gpiod::line nmiOutLine;
-
+static gpiod::line slotACPowerLine;
 static constexpr uint8_t beepPowerFail = 8;
 
 static void beep(const uint8_t& beepPriority)
@@ -144,6 +144,13 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "/xyz/openbmc_project/BeepCode",
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
+
+enum class SlotACPowerState
+{
+    on,
+    off,
+};
+static SlotACPowerState slotACPowerState;
 
 enum class PowerState
 {
@@ -228,8 +235,6 @@ enum class Event
     powerOffRequest,
     powerCycleRequest,
     resetRequest,
-    slotACPowerOffRequest,
-    slotACPowerOnRequest,
     gracefulPowerOffRequest,
     gracefulPowerCycleRequest,
     warmResetDetected,
@@ -291,12 +296,6 @@ static std::string getEventName(Event event)
             break;
         case Event::resetRequest:
             return "reset request";
-            break;
-        case Event::slotACPowerOffRequest:
-            return "slot AC Power-off request";
-            break;
-        case Event::slotACPowerOnRequest:
-            return "slot AC Power-on request";
             break;
         case Event::gracefulPowerOffRequest:
             return "graceful power-off request";
@@ -1096,29 +1095,13 @@ static void powerOn()
 
 static void slotACPowerOn()
 {
-    // Find the GPIO line
-    gpiod::line gpioLine = gpiod::find_line(slotACPowerName);
-    if (!gpioLine)
-    {
-        std::cerr << "Failed to find the " << slotACPowerName << " line.\n";
-    }
-
-    gpioLine.set_value(1);
-    sendPowerControlEvent(Event::powerOnRequest);
+    slotACPowerLine.set_value(1);
 }
 
 static void slotACPowerOff()
 {
-    sendPowerControlEvent(Event::powerOffRequest);
-
-    // Find the GPIO line
-    gpiod::line gpioLine = gpiod::find_line(slotACPowerName);
-    if (!gpioLine)
-    {
-        std::cerr << "Failed to find the " << slotACPowerName << " line.\n";
-    }
-
-    gpioLine.set_value(0);
+    slotACPowerLine.set_value(0);
+    setPowerState(PowerState::off);
 }
 
 
@@ -1466,9 +1449,6 @@ static void powerStateOn(const Event event)
             setPowerState(PowerState::transitionToOff);
             forcePowerOff();
             break;
-        case Event::slotACPowerOffRequest:
-            slotACPowerOff();
-            break;
         case Event::gracefulPowerOffRequest:
             setPowerState(PowerState::gracefulTransitionToOff);
             gracefulPowerOffTimerStart();
@@ -1580,10 +1560,6 @@ static void powerStateOff(const Event event)
             psPowerOKWatchdogTimerStart();
             setPowerState(PowerState::waitForPSPowerOK);
             powerOn();
-            break;
-        case Event::slotACPowerOnRequest:
-            slotACPowerOn();
-        return;
             break;
         default:
             phosphor::logging::log<phosphor::logging::level::INFO>(
@@ -2369,6 +2345,19 @@ int main(int argc, char* argv[])
         power_control::powerState = power_control::PowerState::on;
     }
 
+    // Initialize the power slot state
+    power_control::slotACPowerState = power_control::SlotACPowerState::off;
+    power_control::slotACPowerLine = gpiod::find_line(power_control::slotACPowerName);
+    if (!power_control::slotACPowerLine)
+    {
+        std::cerr << "Failed to find the " << power_control::slotACPowerName << " line.\n";
+        return -1;
+    }
+    else if (power_control::slotACPowerLine.get_value() > 0)
+    {
+        power_control::slotACPowerState = power_control::SlotACPowerState::on;
+    }
+
     // Initialize the power state storage
     if (power_control::initializePowerStateStorage() < 0)
     {
@@ -2457,14 +2446,40 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                sendPowerControlEvent(power_control::Event::slotACPowerOffRequest);
+#ifdef SLOT_AC
+                if (power_control::slotACPowerState == power_control::SlotACPowerState::off)
+                {
+                    std::cerr << "Slot Ac Power is already in 'Off' state\n";
+                }
+                else
+                {
+                   power_control::slotACPowerOff();
+                   power_control::slotACPowerState = power_control::SlotACPowerState::off;
+                   std::cerr << "Slot Ac Power is switched Off\n";
+                }
+#else
+                sendPowerControlEvent(power_control::Event::powerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
+#endif
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                sendPowerControlEvent(power_control::Event::slotACPowerOnRequest);
+#ifdef SLOT_AC
+                if (power_control::slotACPowerState == power_control::SlotACPowerState::on) 
+                {
+                    std::cerr << "Slot Ac Power is already in 'On' state\n";
+                }
+                else
+                {
+                   power_control::slotACPowerOn();
+                   power_control::slotACPowerState = power_control::SlotACPowerState::on;
+                   std::cerr << "Slot Ac Power is switched On\n";
+                }
+#else
+                sendPowerControlEvent(power_control::Event::powerOnRequest);
                 addRestartCause(power_control::RestartCause::command);
+#endif
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
