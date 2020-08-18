@@ -228,6 +228,7 @@ enum class Event
     powerOffRequest,
     powerCycleRequest,
     resetRequest,
+    slotACPowerOffRequest,
     slotACPowerOnRequest,
     gracefulPowerOffRequest,
     gracefulPowerCycleRequest,
@@ -291,7 +292,10 @@ static std::string getEventName(Event event)
         case Event::resetRequest:
             return "reset request";
             break;
-        case Event:slotACPowerOnRequest:
+        case Event::slotACPowerOffRequest:
+            return "slot AC Power-off request";
+            break;
+        case Event::slotACPowerOnRequest:
             return "slot AC Power-on request";
             break;
         case Event::gracefulPowerOffRequest:
@@ -1093,29 +1097,28 @@ static void powerOn()
 static void slotACPowerOn()
 {
     // Find the GPIO line
-    gpiod::line gpioLine = gpiod::find_line(power_control::slotACPowerName);
+    gpiod::line gpioLine = gpiod::find_line(slotACPowerName);
     if (!gpioLine)
     {
-        std::cerr << "Failed to find the " << name << " line.\n";
-        return false;
+        std::cerr << "Failed to find the " << slotACPowerName << " line.\n";
     }
-    gpioLine.set_value(1);
-    powerOn();
 
+    gpioLine.set_value(1);
+    sendPowerControlEvent(Event::powerOnRequest);
 }
 
 static void slotACPowerOff()
 {
+    sendPowerControlEvent(Event::powerOffRequest);
+
     // Find the GPIO line
-    gpiod::line gpioLine = gpiod::find_line(power_control::slotACPowerName);
+    gpiod::line gpioLine = gpiod::find_line(slotACPowerName);
     if (!gpioLine)
     {
-        std::cerr << "Failed to find the " << name << " line.\n";
-        return false;
+        std::cerr << "Failed to find the " << slotACPowerName << " line.\n";
     }
-    gpioLine.set_value(1);
-    powerOn();
 
+    gpioLine.set_value(0);
 }
 
 
@@ -1463,6 +1466,9 @@ static void powerStateOn(const Event event)
             setPowerState(PowerState::transitionToOff);
             forcePowerOff();
             break;
+        case Event::slotACPowerOffRequest:
+            slotACPowerOff();
+            break;
         case Event::gracefulPowerOffRequest:
             setPowerState(PowerState::gracefulTransitionToOff);
             gracefulPowerOffTimerStart();
@@ -1575,8 +1581,9 @@ static void powerStateOff(const Event event)
             setPowerState(PowerState::waitForPSPowerOK);
             powerOn();
             break;
-        case Event::slotACPowerCycleRequest:
-            slotACPowerCycle();
+        case Event::slotACPowerOnRequest:
+            slotACPowerOn();
+        return;
             break;
         default:
             phosphor::logging::log<phosphor::logging::level::INFO>(
@@ -2450,7 +2457,7 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                sendPowerControlEvent(power_control::Event::powerOffRequest);
+                sendPowerControlEvent(power_control::Event::slotACPowerOffRequest);
                 addRestartCause(power_control::RestartCause::command);
             }
             else if (requested ==
