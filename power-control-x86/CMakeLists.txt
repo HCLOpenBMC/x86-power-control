@@ -37,7 +37,6 @@ set(
   ${PROJECT_SOURCE_DIR}/config/power-config-host0.json
   )
 
-OPTION(POWER_SLOT_OPTION "Option Description" ON)
 IF(POWER_SLOT_OPTION)
     add_definitions(-DSLOT_AC)
 ENDIF(POWER_SLOT_OPTION)
