@@ -1099,12 +1099,16 @@ static void powerOn()
 static void slotACPowerOn()
 {
     slotACPowerLine.set_value(1);
+    power_control::slotACPowerState = power_control::SlotACPowerState::on;
+    std::cerr << "Slot Ac Power is switched On\n";
 }
 
 static void slotACPowerOff()
 {
     slotACPowerLine.set_value(0);
     setPowerState(PowerState::off);
+    power_control::slotACPowerState = power_control::SlotACPowerState::off;
+    std::cerr << "Slot Ac Power is switched Off\n";
 }
 #endif
 
@@ -2353,17 +2357,15 @@ int main(int argc, char* argv[])
 #ifdef SLOT_AC
     // Initialize the power slot state
     power_control::slotACPowerState = power_control::SlotACPowerState::off;
-    power_control::slotACPowerLine =
-        gpiod::find_line(power_control::slotACPowerName);
-    if (!power_control::slotACPowerLine)
-    {
-        std::cerr << "Failed to find the " << power_control::slotACPowerName
-                  << " line.\n";
-        return -1;
-    }
-    else if (power_control::slotACPowerLine.get_value() > 0)
+
+    if (power_control::setGPIOOutput(power_control::slotACPowerName, 1,
+                                     power_control::slotACPowerLine))
     {
         power_control::slotACPowerState = power_control::SlotACPowerState::on;
+    }
+    else
+    {
+        return -1;
     }
 #endif
 
@@ -2464,9 +2466,6 @@ int main(int argc, char* argv[])
                 else
                 {
                     power_control::slotACPowerOff();
-                    power_control::slotACPowerState =
-                        power_control::SlotACPowerState::off;
-                    std::cerr << "Slot Ac Power is switched Off\n";
                 }
 #else
                 sendPowerControlEvent(power_control::Event::powerOffRequest);
@@ -2485,9 +2484,6 @@ int main(int argc, char* argv[])
                 else
                 {
                     power_control::slotACPowerOn();
-                    power_control::slotACPowerState =
-                        power_control::SlotACPowerState::on;
-                    std::cerr << "Slot Ac Power is switched On\n";
                 }
 #else
                 sendPowerControlEvent(power_control::Event::powerOnRequest);
