@@ -4,10 +4,10 @@
   "NMIOut": "NMI_OUT",
   "PostComplete": "POST_COMPLETE",
   "PwrButton": "MULTI_HOST_POWER_BUTTON",
-  "PwrOK": "SLOT1_POWER",
-  "PwrOut": "POWER_OUT0",
+  "PwrOK": "SLOT1_POWER_OK",
+  "PwrOut": "POWER_OUT1",
   "RstButton": "MULTI_HOST_RESET_BUTTON",
-  "RstOut": "RESET_OUT0",
+  "RstOut": "RESET_OUT1",
   "SlotACPower": "SLOT1_POWER"
 }
 
