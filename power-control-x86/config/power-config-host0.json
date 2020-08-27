@@ -3,11 +3,13 @@
   "NMIButton": "NMI_BUTTON",
   "NMIOut": "NMI_OUT",
   "PostComplete": "POST_COMPLETE",
-  "PwrButton": "MULTI_HOST_POWER_BUTTON",
-  "PwrOK": "SLOT1_POWER_OK",
-  "PwrOut": "POWER_OUT1",
-  "RstButton": "MULTI_HOST_RESET_BUTTON",
-  "RstOut": "RESET_OUT1",
-  "SlotACPower": "SLOT1_POWER"
+  "PwrButton": "POWER_BUTTON",
+  "PwrOK": "PS_PWROK",
+  "PwrOut": "POWER_OUT",
+  "RstButton": "RESET_BUTTON",
+  "RstOut": "RESET_OUT",
+  "SIOOnCtl": "SIO_ONCONTROL",
+  "SIOPwrGd": "SIO_POWER_GOOD",
+  "SIOS5": "SIO_S5"
 }
 
