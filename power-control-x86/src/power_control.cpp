@@ -77,6 +77,7 @@ const static constexpr int gracefulPowerOffTimeMs = 60000;
 const static constexpr int warmResetCheckTimeMs = 500;
 const static constexpr int buttonMaskTimeMs = 60000;
 const static constexpr int powerOffSaveTimeMs = 7000;
+const static constexpr int slotACpowerCycleTimeMs = 1000;
 
 const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
@@ -103,6 +104,8 @@ static boost::asio::steady_timer powerStateSaveTimer(io);
 static boost::asio::steady_timer pohCounterTimer(io);
 // Time when to allow restart cause updates
 static boost::asio::steady_timer restartCauseTimer(io);
+// Time between off and on during a slot AC power cycle
+static boost::asio::steady_timer slotACPowerCycleTimer(io);
 
 // GPIO Lines and Event Descriptors
 static gpiod::line psPowerOKLine;
@@ -145,7 +148,7 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
 
-#ifdef SLOT_AC
+#ifdef SLOT_AC_POWER
 enum class SlotACPowerState
 {
     on,
@@ -1095,21 +1098,37 @@ static void powerOn()
     setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
 }
 
-#ifdef SLOT_AC
+#ifdef SLOT_AC_POWER
 static void slotACPowerOn()
 {
-    slotACPowerLine.set_value(1);
-    power_control::slotACPowerState = power_control::SlotACPowerState::on;
+    if (setGPIOOutput(slotACPowerName, 1, slotACPowerLine))
+    {
+        slotACPowerState = SlotACPowerState::on;
+    }
     std::cerr << "Slot Ac Power is switched On\n";
 }
 
 static void slotACPowerOff()
 {
-    slotACPowerLine.set_value(0);
-    setPowerState(PowerState::off);
-    power_control::slotACPowerState = power_control::SlotACPowerState::off;
+    if (setGPIOOutput(slotACPowerName, 0, slotACPowerLine))
+    {
+        slotACPowerState = SlotACPowerState::off;
+        setPowerState(PowerState::off);
+    }
     std::cerr << "Slot Ac Power is switched Off\n";
 }
+
+static void slotACPowerCycle()
+{
+    std::cerr << "Slot Ac Power Cycle started\n";
+    slotACPowerOff();
+    slotACPowerCycleTimer.expires_after(
+        std::chrono::milliseconds(slotACpowerCycleTimeMs));
+    slotACPowerCycleTimer.wait();
+    slotACPowerOn();
+    std::cerr << "Slot Ac Power Cycle Completed\n";
+}
+
 #endif
 
 static void gracefulPowerOff()
@@ -2165,7 +2184,7 @@ static int loadConfigValues()
         sioS5Name = data["SIOS5"];
     }
 
-#ifdef SLOT_AC
+#ifdef SLOT_AC_POWER
     if (data.contains("SlotACPower"))
     {
         slotACPowerName = data["SlotACPower"];
@@ -2354,7 +2373,7 @@ int main(int argc, char* argv[])
         power_control::powerState = power_control::PowerState::on;
     }
 
-#ifdef SLOT_AC
+#ifdef SLOT_AC_POWER
     // Initialize the power slot state
     power_control::slotACPowerState = power_control::SlotACPowerState::off;
 
@@ -2457,7 +2476,7 @@ int main(int argc, char* argv[])
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-#ifdef SLOT_AC
+#ifdef SLOT_AC_POWER
                 if (power_control::slotACPowerState ==
                     power_control::SlotACPowerState::off)
                 {
@@ -2475,7 +2494,7 @@ int main(int argc, char* argv[])
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-#ifdef SLOT_AC
+#ifdef SLOT_AC_POWER
                 if (power_control::slotACPowerState ==
                     power_control::SlotACPowerState::on)
                 {
@@ -2493,8 +2512,12 @@ int main(int argc, char* argv[])
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
+#ifdef SLOT_AC_POWER
+                power_control::slotACPowerCycle();
+#else
                 sendPowerControlEvent(power_control::Event::powerCycleRequest);
                 addRestartCause(power_control::RestartCause::command);
+#endif
             }
             else
             {
