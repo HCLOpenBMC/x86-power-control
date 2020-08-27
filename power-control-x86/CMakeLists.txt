@@ -38,7 +38,7 @@ set(
   )
 
 IF(POWER_SLOT_OPTION)
-    add_definitions(-DSLOT_AC)
+    add_definitions(-DSLOT_AC_POWER)
 ENDIF(POWER_SLOT_OPTION)
 
 install(FILES ${SERVICE_FILES} DESTINATION /lib/systemd/system/)
