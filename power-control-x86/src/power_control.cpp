@@ -77,7 +77,7 @@ const static constexpr int gracefulPowerOffTimeMs = 60000;
 const static constexpr int warmResetCheckTimeMs = 500;
 const static constexpr int buttonMaskTimeMs = 60000;
 const static constexpr int powerOffSaveTimeMs = 7000;
-const static constexpr int slotACpowerCycleTimeMs = 1000;
+const static constexpr int slotACpowerCycleTimeMs = 200;
 
 const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
