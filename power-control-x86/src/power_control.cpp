@@ -38,18 +38,32 @@ std::shared_ptr<sdbusplus::asio::connection> conn;
 
 static std::string node = "0";
 
-static std::string powerOutName;
-static std::string powerOkName;
-static std::string resetOutName;
-static std::string nmiOutName;
-static std::string sioPwrGoodName;
-static std::string sioOnControlName;
-static std::string sioS5Name;
-static std::string postCompleteName;
-static std::string powerButtonName;
-static std::string resetButtonName;
-static std::string idButtonName;
-static std::string nmiButtonName;
+enum class ConfigType
+{
+    GPIO,
+    IPMI
+};
+
+struct ConfigData
+{
+    std::string name;
+    std::string lineName;
+    std::string dbusName;
+    ConfigType type;
+};
+
+static ConfigData powerOutConfig;
+static ConfigData powerOkConfig;
+static ConfigData resetOutConfig;
+static ConfigData nmiOutConfig;
+static ConfigData sioPwrGoodConfig;
+static ConfigData sioOnControlConfig;
+static ConfigData sioS5Config;
+static ConfigData postCompleteConfig;
+static ConfigData powerButtonConfig;
+static ConfigData resetButtonConfig;
+static ConfigData idButtonConfig;
+static ConfigData nmiButtonConfig;
 
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
