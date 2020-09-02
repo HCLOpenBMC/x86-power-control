@@ -2056,76 +2056,175 @@ static int loadConfigValues()
         std::cerr << "loadConfigValues : Cannot open config path\n ";
         return -1;
     }
-    auto data = nlohmann::json::parse(configFile, nullptr);
+    auto config = nlohmann::json::parse(configFile, nullptr);
 
-    if (data.is_discarded())
+    if (config.is_discarded())
     {
         std::cerr << "Power config readings JSON parser failure";
         return -1;
     }
 
-    if (data.contains("IdButton"))
-    {
-        idButtonName = data["IdButton"];
-    }
+    ConfigData* tempData;
 
-    if (data.contains("NMIButton"))
+    for (auto& data : config)
     {
-        nmiButtonName = data["NMIButton"];
-    }
+        if (data.contains("Name"))
+        {
+            if (data["Name"] == "IdButton")
+            {
+                tempData = idButtonConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "NMIButton")
+            {
+                tempData = nmiButtonConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "NMIOut")
+            {
+                tempData = nmiOutConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "PostComplete")
+            {
+                tempData = postCompleteConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "PowerButton")
+            {
+                tempData = powerButtonConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "PowerOk")
+            {
+                tempData = powerOkConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "PowerOut")
+            {
+                tempData = powerOutConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "ResetButton")
+            {
+                tempData = resetButtonConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "ResetOut")
+            {
+                tempData = resetOutConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "SioOnControl")
+            {
+                tempData = sioOnControlConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "SioPowerGood")
+            {
+                tempData = sioPwrGoodConfig;
+                tempData->name = data["Name"];
+            }
+            else if (data["Name"] == "SIOS5")
+            {
+                tempData = sioS5Config;
+                tempData->name = data["Name"];
+            }
+            else
+            {
+                std::cerr << "Undefined Name : " << data["Name"] <<"\n";
+                return -1;
+            }
+        }
+        else
+        {
+            std::cerr << "The 'Name' field must be defined in Json file\n";
+            return -1;
+        }
 
-    if (data.contains("NMIOut"))
-    {
-        nmiOutName = data["NMIOut"];
-    }
+        if (data.contains("Type"))
+        {
+            if( data["Type"] == "GPIO")
+            {
+                tempData->type = ConfigType::GPIO;
+            }
+            else
+            {
+                tempData->type = ConfigType::IPMI;
+            }
+            else
+            {
+                std::cerr << "Undefined Type : " << data["Type"] <<"\n";
+            }
+        }
+        else
+        {
+            std::cerr << "The 'Type' field must be defined in Json file\n";
+            return -1;
+        }
 
-    if (data.contains("PostComplete"))
-    {
-        postCompleteName = data["PostComplete"];
-    }
+        if (tempData->type == ConfigType::GPIO)
+        {
+            if (data.contains(""))
+            {
 
-    if (data.contains("PwrButton"))
-    {
-        powerButtonName = data["PwrButton"];
-    }
 
-    if (data.contains("PwrOK"))
-    {
-        powerOkName = data["PwrOK"];
-    }
 
-    if (data.contains("PwrOut"))
-    {
-        powerOutName = data["PwrOut"];
-    }
 
-    if (data.contains("RstButton"))
-    {
-        resetButtonName = data["RstButton"];
-    }
+        }
 
-    if (data.contains("RstOut"))
-    {
-        resetOutName = data["RstOut"];
-    }
+        if (data.contains("NMIOut"))
+        {
+            nmiOutName = data["NMIOut"];
+        }
 
-    if (data.contains("SIOOnCtl"))
-    {
-        sioOnControlName = data["SIOOnCtl"];
-    }
+        if (data.contains("PostComplete"))
+        {
+            postCompleteName = data["PostComplete"];
+        }
 
-    if (data.contains("SIOPwrGd"))
-    {
-        sioPwrGoodName = data["SIOPwrGd"];
-    }
+        if (data.contains("PwrButton"))
+        {
+            powerButtonName = data["PwrButton"];
+        }
 
-    if (data.contains("SIOS5"))
-    {
-        sioS5Name = data["SIOS5"];
-    }
+        if (data.contains("PwrOK"))
+        {
+            powerOkName = data["PwrOK"];
+        }
 
-    return 0;
-}
+        if (data.contains("PwrOut"))
+        {
+            powerOutName = data["PwrOut"];
+        }
+
+        if (data.contains("RstButton"))
+        {
+            resetButtonName = data["RstButton"];
+        }
+
+        if (data.contains("RstOut"))
+        {
+            resetOutName = data["RstOut"];
+        }
+
+        if (data.contains("SIOOnCtl"))
+        {
+            sioOnControlName = data["SIOOnCtl"];
+        }
+
+        if (data.contains("SIOPwrGd"))
+        {
+            sioPwrGoodName = data["SIOPwrGd"];
+        }
+
+        if (data.contains("SIOS5"))
+        {
+            sioS5Name = data["SIOS5"];
+        }
+
+        return 0;
+    }
 
 } // namespace power_control
 
