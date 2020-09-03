@@ -1056,12 +1056,12 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
                               const int durationMs)
 {
     // If the requested GPIO is masked, use the mask line to set the output
-    if (powerButtonMask && name == power_control::powerOutName)
+    if (powerButtonMask && name == power_control::powerOutConfig.lineName)
     {
         return setMaskedGPIOOutputForMs(powerButtonMask, name, value,
                                         durationMs);
     }
-    if (resetButtonMask && name == power_control::resetOutName)
+    if (resetButtonMask && name == power_control::resetOutConfig.lineName)
     {
         return setMaskedGPIOOutputForMs(resetButtonMask, name, value,
                                         durationMs);
@@ -1095,17 +1095,17 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
 
 static void powerOn()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(power_control::powerOutConfig.lineName, 0, powerPulseTimeMs);
 }
 
 static void gracefulPowerOff()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(power_control::powerOutConfig.lineName, 0, powerPulseTimeMs);
 }
 
 static void forcePowerOff()
 {
-    if (setGPIOOutputForMs(power_control::powerOutName, 0,
+    if (setGPIOOutputForMs(power_control::powerOutConfig.lineName, 0,
                            forceOffPulseTimeMs) < 0)
     {
         return;
@@ -1142,7 +1142,7 @@ static void forcePowerOff()
 
 static void reset()
 {
-    setGPIOOutputForMs(power_control::resetOutName, 0, resetPulseTimeMs);
+    setGPIOOutputForMs(power_control::resetOutConfig.lineName, 0, resetPulseTimeMs);
 }
 
 static void gracefulPowerOffTimerStart()
@@ -1873,19 +1873,19 @@ static void nmiReset(void)
 
     std::cerr << "NMI out action \n";
     nmiOutLine.set_value(value);
-    std::cerr << nmiOutName << " set to " << std::to_string(value) << "\n";
+    std::cerr << nmiOutConfig.lineName << " set to " << std::to_string(value) << "\n";
     gpioAssertTimer.expires_after(std::chrono::milliseconds(nmiOutPulseTimeMs));
     gpioAssertTimer.async_wait([](const boost::system::error_code ec) {
         // restore the NMI_OUT GPIO line back to the opposite value
         nmiOutLine.set_value(!value);
-        std::cerr << nmiOutName << " released\n";
+        std::cerr << nmiOutConfig.lineName << " released\n";
         if (ec)
         {
             // operation_aborted is expected if timer is canceled before
             // completion.
             if (ec != boost::asio::error::operation_aborted)
             {
-                std::cerr << nmiOutName << " async_wait failed: " + ec.message()
+                std::cerr << nmiOutConfig.lineName << " async_wait failed: " + ec.message()
                           << "\n";
             }
         }
@@ -2072,62 +2072,62 @@ static int loadConfigValues()
         {
             if (data["Name"] == "IdButton")
             {
-                tempData = idButtonConfig;
+                tempData = &idButtonConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "NMIButton")
             {
-                tempData = nmiButtonConfig;
+                tempData = &nmiButtonConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "NMIOut")
             {
-                tempData = nmiOutConfig;
+                tempData = &nmiOutConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "PostComplete")
             {
-                tempData = postCompleteConfig;
+                tempData = &postCompleteConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "PowerButton")
             {
-                tempData = powerButtonConfig;
+                tempData = &powerButtonConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "PowerOk")
             {
-                tempData = powerOkConfig;
+                tempData = &powerOkConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "PowerOut")
             {
-                tempData = powerOutConfig;
+                tempData = &powerOutConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "ResetButton")
             {
-                tempData = resetButtonConfig;
+                tempData = &resetButtonConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "ResetOut")
             {
-                tempData = resetOutConfig;
+                tempData = &resetOutConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "SioOnControl")
             {
-                tempData = sioOnControlConfig;
+                tempData = &sioOnControlConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "SioPowerGood")
             {
-                tempData = sioPwrGoodConfig;
+                tempData = &sioPwrGoodConfig;
                 tempData->name = data["Name"];
             }
             else if (data["Name"] == "SIOS5")
             {
-                tempData = sioS5Config;
+                tempData = &sioS5Config;
                 tempData->name = data["Name"];
             }
             else
@@ -2232,10 +2232,10 @@ int main(int argc, char* argv[])
         "xyz.openbmc_project.Control.Host.RestartCause");
 
     // Request PS_PWROK GPIO events
-    if (!power_control::powerOkName.empty())
+    if (!power_control::powerOkConfig.lineName.empty())
     {
         if (!power_control::requestGPIOEvents(
-                power_control::powerOkName, power_control::psPowerOKHandler,
+                power_control::powerOkConfig.lineName, power_control::psPowerOKHandler,
                 power_control::psPowerOKLine, power_control::psPowerOKEvent))
         {
             return -1;
@@ -2249,10 +2249,10 @@ int main(int argc, char* argv[])
     }
 
     // Request SIO_POWER_GOOD GPIO events
-    if (!power_control::sioPwrGoodName.empty())
+    if (!power_control::sioPwrGoodConfig.lineName.empty())
     {
         if (!power_control::requestGPIOEvents(
-                power_control::sioPwrGoodName,
+                power_control::sioPwrGoodConfig.lineName,
                 power_control::sioPowerGoodHandler,
                 power_control::sioPowerGoodLine,
                 power_control::sioPowerGoodEvent))
@@ -2268,10 +2268,10 @@ int main(int argc, char* argv[])
     }
 
     // Request SIO_ONCONTROL GPIO events
-    if (!power_control::sioOnControlName.empty())
+    if (!power_control::sioOnControlConfig.lineName.empty())
     {
         if (!power_control::requestGPIOEvents(
-                power_control::sioOnControlName,
+                power_control::sioOnControlConfig.lineName,
                 power_control::sioOnControlHandler,
                 power_control::sioOnControlLine,
                 power_control::sioOnControlEvent))
@@ -2287,10 +2287,10 @@ int main(int argc, char* argv[])
     }
 
     // Request SIO_S5 GPIO events
-    if (!power_control::sioS5Name.empty())
+    if (!power_control::sioS5Config.lineName.empty())
     {
         if (!power_control::requestGPIOEvents(
-                power_control::sioS5Name, power_control::sioS5Handler,
+                power_control::sioS5Config.lineName, power_control::sioS5Handler,
                 power_control::sioS5Line, power_control::sioS5Event))
         {
             return -1;
@@ -2303,9 +2303,9 @@ int main(int argc, char* argv[])
     }
 
     // Request POWER_BUTTON GPIO events
-    if (!power_control::powerButtonName.empty())
+    if (!power_control::powerButtonConfig.lineName.empty())
     {
-        if (!power_control::requestGPIOEvents(power_control::powerButtonName,
+        if (!power_control::requestGPIOEvents(power_control::powerButtonConfig.lineName,
                                               power_control::powerButtonHandler,
                                               power_control::powerButtonLine,
                                               power_control::powerButtonEvent))
@@ -2321,9 +2321,9 @@ int main(int argc, char* argv[])
     }
 
     // Request RESET_BUTTON GPIO events
-    if (!power_control::resetButtonName.empty())
+    if (!power_control::resetButtonConfig.lineName.empty())
     {
-        if (!power_control::requestGPIOEvents(power_control::resetButtonName,
+        if (!power_control::requestGPIOEvents(power_control::resetButtonConfig.lineName,
                                               power_control::resetButtonHandler,
                                               power_control::resetButtonLine,
                                               power_control::resetButtonEvent))
@@ -2339,26 +2339,26 @@ int main(int argc, char* argv[])
     }
 
     // Request NMI_BUTTON GPIO events
-    if (!power_control::nmiButtonName.empty())
+    if (!power_control::nmiButtonConfig.lineName.empty())
     {
         power_control::requestGPIOEvents(
-            power_control::nmiButtonName, power_control::nmiButtonHandler,
+            power_control::nmiButtonConfig.lineName, power_control::nmiButtonHandler,
             power_control::nmiButtonLine, power_control::nmiButtonEvent);
     }
 
     // Request ID_BUTTON GPIO events
-    if (!power_control::idButtonName.empty())
+    if (!power_control::idButtonConfig.lineName.empty())
     {
         power_control::requestGPIOEvents(
-            power_control::idButtonName, power_control::idButtonHandler,
+            power_control::idButtonConfig.lineName, power_control::idButtonHandler,
             power_control::idButtonLine, power_control::idButtonEvent);
     }
 
     // Request POST_COMPLETE GPIO events
-    if (!power_control::postCompleteName.empty())
+    if (!power_control::postCompleteConfig.lineName.empty())
     {
         if (!power_control::requestGPIOEvents(
-                power_control::postCompleteName,
+                power_control::postCompleteConfig.lineName,
                 power_control::postCompleteHandler,
                 power_control::postCompleteLine,
                 power_control::postCompleteEvent))
@@ -2374,17 +2374,17 @@ int main(int argc, char* argv[])
     }
 
     // initialize NMI_OUT GPIO.
-    power_control::setGPIOOutput(power_control::nmiOutName, 0,
+    power_control::setGPIOOutput(power_control::nmiOutConfig.lineName, 0,
                                  power_control::nmiOutLine);
 
     // Initialize POWER_OUT and RESET_OUT GPIO.
     gpiod::line line;
-    if (!power_control::setGPIOOutput(power_control::powerOutName, 1, line))
+    if (!power_control::setGPIOOutput(power_control::powerOutConfig.lineName, 1, line))
     {
         return -1;
     }
 
-    if (!power_control::setGPIOOutput(power_control::resetOutName, 1, line))
+    if (!power_control::setGPIOOutput(power_control::resetOutConfig.lineName, 1, line))
     {
         return -1;
     }
@@ -2575,7 +2575,7 @@ int main(int argc, char* argv[])
                     return 1;
                 }
                 if (!power_control::setGPIOOutput(
-                        power_control::powerOutName, 1,
+                        power_control::powerOutConfig.lineName, 1,
                         power_control::powerButtonMask))
                 {
                     throw std::runtime_error("Failed to request GPIO");
@@ -2618,7 +2618,7 @@ int main(int argc, char* argv[])
                     return 1;
                 }
                 if (!power_control::setGPIOOutput(
-                        power_control::resetOutName, 1,
+                        power_control::resetOutConfig.lineName, 1,
                         power_control::resetButtonMask))
                 {
                     throw std::runtime_error("Failed to request GPIO");
