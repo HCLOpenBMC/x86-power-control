@@ -40,7 +40,7 @@ static std::string node = "0";
 
 enum class ConfigType
 {
-    GPIO,
+    GPIO =1,
     DBUS
 };
 
@@ -2294,7 +2294,7 @@ int main(int argc, char* argv[])
         "xyz.openbmc_project.Control.Host.RestartCause");
 
     // Request PS_PWROK GPIO events
-    if (!power_control::powerOkConfig.lineName.empty())
+    if (power_control::powerOkConfig.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(
                 power_control::powerOkConfig.lineName, power_control::psPowerOKHandler,
@@ -2303,7 +2303,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::powerOkConfig.type != power_control::ConfigType::DBUS)
     {
         std::cerr
             << "PowerOk name should be configured from json config file\n";
@@ -2311,7 +2311,7 @@ int main(int argc, char* argv[])
     }
 
     // Request SIO_POWER_GOOD GPIO events
-    if (!power_control::sioPwrGoodConfig.lineName.empty())
+    if (power_control::sioPwrGoodConfig.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(
                 power_control::sioPwrGoodConfig.lineName,
@@ -2322,7 +2322,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::sioPwrGoodConfig.type != power_control::ConfigType::DBUS)
     {
         std::cerr
             << "sioPwrGood name should be configured from json config file\n";
@@ -2330,7 +2330,7 @@ int main(int argc, char* argv[])
     }
 
     // Request SIO_ONCONTROL GPIO events
-    if (!power_control::sioOnControlConfig.lineName.empty())
+    if (power_control::sioOnControlConfig.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(
                 power_control::sioOnControlConfig.lineName,
@@ -2341,7 +2341,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::sioOnControlConfig.type != power_control::ConfigType::DBUS)
     {
         std::cerr
             << "sioOnControl name should be configured from json config file\n";
@@ -2349,7 +2349,7 @@ int main(int argc, char* argv[])
     }
 
     // Request SIO_S5 GPIO events
-    if (!power_control::sioS5Config.lineName.empty())
+    if (power_control::sioS5Config.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(
                 power_control::sioS5Config.lineName, power_control::sioS5Handler,
@@ -2358,14 +2358,14 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::sioS5Config.type != power_control::ConfigType::DBUS)
     {
         std::cerr << "sioS5 name should be configured from json config file\n";
         return -1;
     }
 
     // Request POWER_BUTTON GPIO events
-    if (!power_control::powerButtonConfig.lineName.empty())
+    if (power_control::powerButtonConfig.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(power_control::powerButtonConfig.lineName,
                                               power_control::powerButtonHandler,
@@ -2375,7 +2375,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::powerButtonConfig.type != power_control::ConfigType::DBUS)
     {
         std::cerr
             << "powerButton name should be configured from json config file\n";
@@ -2383,7 +2383,7 @@ int main(int argc, char* argv[])
     }
 
     // Request RESET_BUTTON GPIO events
-    if (!power_control::resetButtonConfig.lineName.empty())
+    if (power_control::resetButtonConfig.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(power_control::resetButtonConfig.lineName,
                                               power_control::resetButtonHandler,
@@ -2393,7 +2393,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if(power_control::resetButtonConfig.type != power_control::ConfigType::DBUS)
     {
         std::cerr
             << "resetButton name should be configured from json config file\n";
@@ -2417,7 +2417,7 @@ int main(int argc, char* argv[])
     }
 
     // Request POST_COMPLETE GPIO events
-    if (!power_control::postCompleteConfig.lineName.empty())
+    if (power_control::postCompleteConfig.type == power_control::ConfigType::GPIO)
     {
         if (!power_control::requestGPIOEvents(
                 power_control::postCompleteConfig.lineName,
@@ -2428,7 +2428,7 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else
+    else if (power_control::postCompleteConfig.type != power_control::ConfigType::DBUS)
     {
         std::cerr
             << "postComplete name should be configured from json config file\n";
@@ -2436,20 +2436,40 @@ int main(int argc, char* argv[])
     }
 
     // initialize NMI_OUT GPIO.
-    power_control::setGPIOOutput(power_control::nmiOutConfig.lineName, 0,
+    if (!power_control::nmiOutConfig.lineName.empty())
+    {
+        power_control::setGPIOOutput(power_control::nmiOutConfig.lineName, 0,
                                  power_control::nmiOutLine);
+    }
 
     // Initialize POWER_OUT and RESET_OUT GPIO.
     gpiod::line line;
+    if (!power_control::powerOutConfig.lineName.empty())
+    {
     if (!power_control::setGPIOOutput(power_control::powerOutConfig.lineName, 1, line))
     {
         return -1;
     }
+    }
+    else
+    {
+        std::cerr << "powerOut name should be configured from json config file\n";
+        return -1;
+    }
 
+    if (!power_control::resetOutConfig.lineName.empty())
+    {
     if (!power_control::setGPIOOutput(power_control::resetOutConfig.lineName, 1, line))
     {
         return -1;
     }
+    }
+    else
+    {
+        std::cerr << "ResetOut name should be configured from json config file\n";
+        return -1;
+    }
+
 
     // Release line
     line.reset();
