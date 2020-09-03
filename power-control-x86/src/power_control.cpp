@@ -41,7 +41,7 @@ static std::string node = "0";
 enum class ConfigType
 {
     GPIO,
-    IPMI
+    DBUS
 };
 
 struct ConfigData
@@ -2132,7 +2132,7 @@ static int loadConfigValues()
             }
             else
             {
-                std::cerr << "Undefined Name : " << data["Name"] <<"\n";
+                std::cerr << "Undefined Name : " << data["Name"] << "\n";
                 return -1;
             }
         }
@@ -2144,17 +2144,18 @@ static int loadConfigValues()
 
         if (data.contains("Type"))
         {
-            if( data["Type"] == "GPIO")
+            if (data["Type"] == "GPIO")
             {
                 tempData->type = ConfigType::GPIO;
             }
-            else
+            else if (data["Type"] == "DBUS")
             {
-                tempData->type = ConfigType::IPMI;
+                tempData->type = ConfigType::DBUS;
             }
             else
             {
-                std::cerr << "Undefined Type : " << data["Type"] <<"\n";
+                std::cerr << "Undefined Type : " << data["Type"] << "\n";
+                return -1;
             }
         }
         else
@@ -2165,66 +2166,45 @@ static int loadConfigValues()
 
         if (tempData->type == ConfigType::GPIO)
         {
-            if (data.contains(""))
+            if (data.contains("LineName"))
             {
-
-
-
-
+                tempData->lineName = data["LineName"];
+            }
+            else
+            {
+                std::cerr << "The 'LineName' field must be defined for GPIO "
+                             "configuration\n";
+                return -1;
+            }
         }
-
-        if (data.contains("NMIOut"))
+        else
         {
-            nmiOutName = data["NMIOut"];
-        }
+            if (data.contains("DbusName"))
+            {
+                tempData->dbusName = data["DbusName"];
+            }
+            else
+            {
+                std::cerr << "The 'DbusName' field must be defined for Dbus "
+                             "configuration\n";
+                return -1;
+            }
 
-        if (data.contains("PostComplete"))
-        {
-            postCompleteName = data["PostComplete"];
+            if (data.contains("Property"))
+            {
+                tempData->lineName = data["Property"];
+            }
+            else
+            {
+                std::cerr << "The 'Property' field must be defined for Dbus "
+                             "configuration\n";
+                return -1;
+            }
         }
-
-        if (data.contains("PwrButton"))
-        {
-            powerButtonName = data["PwrButton"];
-        }
-
-        if (data.contains("PwrOK"))
-        {
-            powerOkName = data["PwrOK"];
-        }
-
-        if (data.contains("PwrOut"))
-        {
-            powerOutName = data["PwrOut"];
-        }
-
-        if (data.contains("RstButton"))
-        {
-            resetButtonName = data["RstButton"];
-        }
-
-        if (data.contains("RstOut"))
-        {
-            resetOutName = data["RstOut"];
-        }
-
-        if (data.contains("SIOOnCtl"))
-        {
-            sioOnControlName = data["SIOOnCtl"];
-        }
-
-        if (data.contains("SIOPwrGd"))
-        {
-            sioPwrGoodName = data["SIOPwrGd"];
-        }
-
-        if (data.contains("SIOS5"))
-        {
-            sioS5Name = data["SIOS5"];
-        }
-
-        return 0;
     }
+
+    return 0;
+}
 
 } // namespace power_control
 
