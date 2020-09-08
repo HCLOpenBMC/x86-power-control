@@ -49,6 +49,8 @@ struct ConfigData
     std::string name;
     std::string lineName;
     std::string dbusName;
+    std::string path;
+    std::string interface;
     ConfigType type;
 };
 
@@ -2216,6 +2218,28 @@ static int loadConfigValues()
                 return -1;
             }
 
+            if (data.contains("Path"))
+            {
+                tempData->path = data["Path"];
+            }
+            else
+            {
+                std::cerr << "The 'Path' field must be defined for Dbus "
+                             "configuration\n";
+                return -1;
+            }
+
+            if (data.contains("Interface"))
+            {
+                tempData->interface = data["Interface"];
+            }
+            else
+            {
+                std::cerr << "The 'Interface' field must be defined for Dbus "
+                             "configuration\n";
+                return -1;
+            }
+
             if (data.contains("Property"))
             {
                 tempData->lineName = data["Property"];
@@ -2289,6 +2313,32 @@ inline static sdbusplus::bus::match::match
 
     return pulseEventMatcher;
 }
+
+int getProperty(ConfigData& configData)
+{
+    
+
+    auto method = conn->new_method_call("xyz.openbmc_project.Misc.Ipmi",
+                                        "/xyz/openbmc_project/misc/ipmi",
+                                        "org.freedesktop.DBus.Properties",
+                                        "Get");
+    method.append("xyz.openbmc_project.Misc.Ipmi","Power_Good1");
+
+    auto reply = conn->call(method);
+    if (reply.is_method_error())
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Error reading from IPMB");
+        return -1;
+    }
+using respType = std::tuple<int, uint8_t, uint8_t, uint8_t, uint8_t, std::vector<uint8_t>>;
+std::variant<int> resp;
+    reply.read(resp);
+
+std::cout<<"Output  : "<< std::get<int>(resp) << "\n";
+    return 0;
+}
+
 
 } // namespace power_control
 
@@ -2487,7 +2537,8 @@ int main(int argc, char* argv[])
 
     // Initialize POWER_OUT and RESET_OUT GPIO.
     gpiod::line line;
-    if (!power_control::powerOutConfig.lineName.empty())
+    //if (!power_control::powerOutConfig.lineName.empty())
+    if(getProperty(power_control::powerOutConfig))
     {
         if (!power_control::setGPIOOutput(
                 power_control::powerOutConfig.lineName, 1, line))
