@@ -2316,29 +2316,25 @@ inline static sdbusplus::bus::match::match
 
 int getProperty(ConfigData& configData)
 {
-    
-
-    auto method = conn->new_method_call("xyz.openbmc_project.Misc.Ipmi",
-                                        "/xyz/openbmc_project/misc/ipmi",
-                                        "org.freedesktop.DBus.Properties",
-                                        "Get");
-    method.append("xyz.openbmc_project.Misc.Ipmi","Power_Good1");
+    std::cerr << "Bus: " << configData.dbusName << "\nPath: " << configData.path
+              << "\nInterface: " << configData.interface << "\nProperty: "
+              << configData.lineName << "\n";
+    auto method = conn->new_method_call(
+        configData.dbusName.c_str(), configData.path.c_str(),
+        "org.freedesktop.DBus.Properties", "Get");
+    method.append(configData.interface.c_str(), configData.lineName.c_str());
 
     auto reply = conn->call(method);
     if (reply.is_method_error())
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Error reading from IPMB");
+            "Error reading from Bus");
         return -1;
     }
-using respType = std::tuple<int, uint8_t, uint8_t, uint8_t, uint8_t, std::vector<uint8_t>>;
-std::variant<int> resp;
+    std::variant<int> resp;
     reply.read(resp);
-
-std::cout<<"Output  : "<< std::get<int>(resp) << "\n";
-    return 0;
+    return std::get<int>(resp);
 }
-
 
 } // namespace power_control
 
@@ -2537,8 +2533,7 @@ int main(int argc, char* argv[])
 
     // Initialize POWER_OUT and RESET_OUT GPIO.
     gpiod::line line;
-    //if (!power_control::powerOutConfig.lineName.empty())
-    if(getProperty(power_control::powerOutConfig))
+    if (!power_control::powerOutConfig.lineName.empty())
     {
         if (!power_control::setGPIOOutput(
                 power_control::powerOutConfig.lineName, 1, line))
@@ -2574,9 +2569,20 @@ int main(int argc, char* argv[])
     // Initialize the power state
     power_control::powerState = power_control::PowerState::off;
     // Check power good
-    if (power_control::psPowerOKLine.get_value() > 0)
+
+    if (power_control::powerOkConfig.type == power_control::ConfigType::GPIO)
     {
-        power_control::powerState = power_control::PowerState::on;
+        if (power_control::psPowerOKLine.get_value() > 0)
+        {
+            power_control::powerState = power_control::PowerState::on;
+        }
+    }
+    else
+    {
+        if (power_control::getProperty(power_control::powerOkConfig))
+        {
+            power_control::powerState = power_control::PowerState::on;
+        }
     }
 
     // Initialize the power state storage
@@ -2777,7 +2783,18 @@ int main(int argc, char* argv[])
         });
 
     // Check power button state
-    bool powerButtonPressed = power_control::powerButtonLine.get_value() == 0;
+    bool powerButtonPressed;
+    if (power_control::powerButtonConfig.type ==
+        power_control::ConfigType::GPIO)
+    {
+        powerButtonPressed = power_control::powerButtonLine.get_value() == 0;
+    }
+    else
+    {
+        powerButtonPressed =
+            power_control::getProperty(power_control::powerButtonConfig) == 0;
+    }
+
     power_control::powerButtonIface->register_property("ButtonPressed",
                                                        powerButtonPressed);
 
@@ -2820,7 +2837,18 @@ int main(int argc, char* argv[])
         });
 
     // Check reset button state
-    bool resetButtonPressed = power_control::resetButtonLine.get_value() == 0;
+    bool resetButtonPressed;
+    if (power_control::resetButtonConfig.type ==
+        power_control::ConfigType::GPIO)
+    {
+        resetButtonPressed = power_control::resetButtonLine.get_value() == 0;
+    }
+    else
+    {
+        resetButtonPressed =
+            power_control::getProperty(power_control::resetButtonConfig) == 0;
+    }
+
     power_control::resetButtonIface->register_property("ButtonPressed",
                                                        resetButtonPressed);
 
@@ -2856,7 +2884,17 @@ int main(int argc, char* argv[])
             });
 
         // Check NMI button state
-        bool nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
+        bool nmiButtonPressed;
+        if (power_control::nmiButtonConfig.type ==
+            power_control::ConfigType::GPIO)
+        {
+            nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
+        }
+        else
+        {
+            nmiButtonPressed = getProperty(power_control::nmiButtonConfig) == 0;
+        }
+
         power_control::nmiButtonIface->register_property("ButtonPressed",
                                                          nmiButtonPressed);
 
@@ -2886,7 +2924,18 @@ int main(int argc, char* argv[])
             "xyz.openbmc_project.Chassis.Buttons");
 
         // Check ID button state
-        bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
+        bool idButtonPressed;
+        if (power_control::idButtonConfig.type ==
+            power_control::ConfigType::GPIO)
+        {
+            idButtonPressed = power_control::idButtonLine.get_value() == 0;
+        }
+        else
+        {
+            idButtonPressed =
+                power_control::getProperty(power_control::idButtonConfig) == 0;
+        }
+
         power_control::idButtonIface->register_property("ButtonPressed",
                                                         idButtonPressed);
 
@@ -2905,9 +2954,20 @@ int main(int argc, char* argv[])
     // Get the initial OS state based on POST complete
     //      0: Asserted, OS state is "Standby" (ready to boot)
     //      1: De-Asserted, OS state is "Inactive"
-    std::string osState = power_control::postCompleteLine.get_value() > 0
-                              ? "Inactive"
-                              : "Standby";
+    std::string osState;
+    if (power_control::postCompleteConfig.type ==
+        power_control::ConfigType::GPIO)
+    {
+        osState = power_control::postCompleteLine.get_value() > 0 ? "Inactive"
+                                                                  : "Standby";
+    }
+    else
+    {
+        osState =
+            power_control::getProperty(power_control::postCompleteConfig) > 0
+                ? "Inactive"
+                : "Standby";
+    }
 
     power_control::osIface->register_property("OperatingSystemState",
                                               std::string(osState));

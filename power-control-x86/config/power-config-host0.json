@@ -1,22 +1,25 @@
 [
     {
         "Name" : "PostComplete",
-        "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "POST_COMPLETE1",
-        "Type" : "DBUS"
+        "LineName" : "POST_COMPLETE",
+        "Type" : "GPIO"
     },
 
     {
         "Name" : "PowerButton",
         "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "POWER_BUTTON1",
+        "Path" : "/xyz/openbmc_project/misc/ipmi",
+        "Interface" : "xyz.openbmc_project.Misc.Ipmi",
+        "Property" : "PowerButtonPressed",
         "Type" : "DBUS"
     },
 
     {
         "Name" : "PowerOk",
         "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "PS_PWROK1",
+        "Path" : "/xyz/openbmc_project/misc/ipmi",
+        "Interface" : "xyz.openbmc_project.Misc.Ipmi",
+        "Property" : "Power_Good1",
         "Type" : "DBUS"
     },
 
@@ -24,19 +27,21 @@
     {
         "Name" : "ResetButton",
         "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "RESET_BUTTON1",
+        "Path" : "/xyz/openbmc_project/misc/ipmi",
+        "Interface" : "xyz.openbmc_project.Misc.Ipmi",
+        "Property" : "ResetButtonPressed",
         "Type" : "DBUS"
     },
 
     {
         "Name" : "PowerOut",
-        "LineName" : "POWER_OUT",
+        "LineName" : "POWER_OUT1",
         "Type" : "GPIO"
     },
 
     {
         "Name" : "ResetOut",
-        "LineName" : "RESET_OUT",
+        "LineName" : "RESET_OUT1",
         "Type" : "GPIO"
     }
 ]
