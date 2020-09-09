@@ -7,29 +7,29 @@
 
     {
         "Name" : "PowerButton",
-        "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Path" : "/xyz/openbmc_project/misc/ipmi",
-        "Interface" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "PowerButtonPressed",
+        "DbusName" : "xyz.openbmc_project.Chassis.Event",
+        "Path" : "/xyz/openbmc_project/Chassis/Event",
+        "Interface" : "xyz.openbmc_project.Chassis.Event",
+        "Property" : "PowerButton_Host1",
         "Type" : "DBUS"
     },
 
     {
         "Name" : "PowerOk",
-        "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Path" : "/xyz/openbmc_project/misc/ipmi",
-        "Interface" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "Power_Good1",
+        "DbusName" : "xyz.openbmc_project.Chassis.Event",
+        "Path" : "/xyz/openbmc_project/Chassis/Event",
+        "Interface" : "xyz.openbmc_project.Chassis.Event",
+        "Property" : "Power_Good_Host1",
         "Type" : "DBUS"
     },
 
 
     {
         "Name" : "ResetButton",
-        "DbusName" : "xyz.openbmc_project.Misc.Ipmi",
-        "Path" : "/xyz/openbmc_project/misc/ipmi",
-        "Interface" : "xyz.openbmc_project.Misc.Ipmi",
-        "Property" : "ResetButtonPressed",
+        "DbusName" : "xyz.openbmc_project.Chassis.Event",
+        "Path" : "/xyz/openbmc_project/Chassis/Event",
+        "Interface" : "xyz.openbmc_project.Chassis.Event",
+        "Property" : "ResetButton_Host1",
         "Type" : "DBUS"
     },
 
