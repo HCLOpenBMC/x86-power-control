@@ -2261,7 +2261,7 @@ inline static sdbusplus::bus::match::match
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
-        boost::container::flat_map<std::string, std::variant<int>>
+        boost::container::flat_map<std::string, std::variant<bool>>
             propertiesChanged;
         msg.read(thresholdInterface, propertiesChanged);
 
@@ -2270,34 +2270,122 @@ inline static sdbusplus::bus::match::match
             return;
         }
         std::string event = propertiesChanged.begin()->first;
-        auto variant = std::get_if<int>(&propertiesChanged.begin()->second);
-        int var = *variant;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
         std::cerr << "Host" << power_control::node << ": "
-                  << "Event :" << event << "  Varient :" << var << "\n";
+                  << "Event :" << event << "  Varient :" << value << "\n";
 
         if (event == powerButtonConfig.lineName)
         {
-            std::cerr << "Host" << power_control::node << ": "
-                      << "Power Button Pressed\n";
-            powerButtonPressLog();
-            sendPowerControlEvent(Event::powerButtonPressed);
-            addRestartCause(RestartCause::powerButton);
+            if (value == false)
+            {
+                powerButtonPressLog();
+                powerButtonIface->set_property("ButtonPressed", true);
+                if (!powerButtonMask)
+                {
+                    sendPowerControlEvent(Event::powerButtonPressed);
+                    addRestartCause(RestartCause::powerButton);
+                }
+                else
+                {
+                    std::cerr << "power button press masked\n";
+                }
+            }
+            else
+            {
+                powerButtonIface->set_property("ButtonPressed", false);
+            }
         }
         else if (event == resetButtonConfig.lineName)
         {
-            std::cerr << "Host" << power_control::node << ": "
-                      << "Reset Button Pressed\n";
-            resetButtonPressLog();
-            sendPowerControlEvent(Event::resetButtonPressed);
-            addRestartCause(RestartCause::resetButton);
+            if (value == false)
+            {
+                resetButtonPressLog();
+                resetButtonIface->set_property("ButtonPressed", true);
+                if (!resetButtonMask)
+                {
+                    sendPowerControlEvent(Event::resetButtonPressed);
+                    addRestartCause(RestartCause::resetButton);
+                }
+                else
+                {
+                    std::cerr << "reset button press masked\n";
+                }
+            }
+            else
+            {
+                resetButtonIface->set_property("ButtonPressed", false);
+            }
         }
         else if ((event == powerOkConfig.lineName))
         {
-            std::cerr << "Host" << power_control::node << ": "
-                      << "PowerGood Event\n";
             Event powerControlEvent =
-                var ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+                value ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
             sendPowerControlEvent(powerControlEvent);
+        }
+        else if ((event == sioPwrGoodConfig.lineName))
+        {
+            Event powerControlEvent =
+                value ? Event::sioPowerGoodAssert : Event::sioPowerGoodDeAssert;
+
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if ((event == sioOnControlConfig.lineName))
+        {
+            std::cerr << "SIO_ONCONTROL value changed: " << value << "\n";
+        }
+        else if ((event == sioS5Config.lineName))
+        {
+            Event powerControlEvent =
+                value ? Event::sioS5DeAssert : Event::sioS5Assert;
+
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if ((event == nmiButtonConfig.lineName))
+        {
+            if (value)
+            {
+                nmiButtonIface->set_property("ButtonPressed", false);
+            }
+            else
+            {
+                nmiButtonPressLog();
+                nmiButtonIface->set_property("ButtonPressed", true);
+                if (nmiButtonMasked)
+                {
+                    std::cerr << "NMI button press masked\n";
+                }
+                else
+                {
+                    setNmiSource();
+                }
+            }
+        }
+        else if ((event == idButtonConfig.lineName))
+        {
+            if (value)
+            {
+                idButtonIface->set_property("ButtonPressed", false);
+            }
+            else
+            {
+                idButtonIface->set_property("ButtonPressed", true);
+            }
+        }
+        else if ((event == postCompleteConfig.lineName))
+        {
+            if (value)
+            {
+                sendPowerControlEvent(Event::postCompleteDeAssert);
+                osIface->set_property("OperatingSystemState",
+                                      std::string("Inactive"));
+            }
+            else
+            {
+                sendPowerControlEvent(Event::postCompleteAssert);
+                osIface->set_property("OperatingSystemState",
+                                      std::string("Standby"));
+            }
         }
         else if (event.empty())
         {
@@ -2316,9 +2404,6 @@ inline static sdbusplus::bus::match::match
 
 int getProperty(ConfigData& configData)
 {
-    std::cerr << "Bus: " << configData.dbusName << "\nPath: " << configData.path
-              << "\nInterface: " << configData.interface << "\nProperty: "
-              << configData.lineName << "\n";
     auto method = conn->new_method_call(
         configData.dbusName.c_str(), configData.path.c_str(),
         "org.freedesktop.DBus.Properties", "Get");
