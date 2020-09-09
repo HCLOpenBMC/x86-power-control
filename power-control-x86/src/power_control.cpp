@@ -2396,7 +2396,7 @@ inline static sdbusplus::bus::match::match
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
         "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='xyz.openbmc_project.Misc.Ipmi'",
+        "PropertiesChanged',arg0namespace='xyz.openbmc_project.Chassis.Event'",
         std::move(pulseEventMatcherCallback));
 
     return pulseEventMatcher;
