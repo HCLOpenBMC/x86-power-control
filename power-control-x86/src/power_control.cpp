@@ -2716,7 +2716,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
 
-        sdbusplus::bus::match::match powerOkEventMonitor =
+        static sdbusplus::bus::match::match powerOkEventMonitor =
             power_control::powerOkEventMonitor(power_control::conn);
     }
     else
@@ -2742,7 +2742,7 @@ int main(int argc, char* argv[])
     else if (power_control::sioPwrGoodConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match sioPwrGoodEventMonitor =
+        static sdbusplus::bus::match::match sioPwrGoodEventMonitor =
             power_control::sioPwrGoodEventMonitor(power_control::conn);
         
     }
@@ -2769,7 +2769,7 @@ int main(int argc, char* argv[])
     else if (power_control::sioOnControlConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match sioOnControlEventMonitor =
+        static sdbusplus::bus::match::match sioOnControlEventMonitor =
             power_control::sioOnControlEventMonitor(power_control::conn);
     }
     else
@@ -2792,7 +2792,7 @@ int main(int argc, char* argv[])
     }
     else if (power_control::sioS5Config.type == power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match sioS5EventMonitor =
+        static sdbusplus::bus::match::match sioS5EventMonitor =
             power_control::sioS5EventMonitor(power_control::conn);
     }
     else
@@ -2818,7 +2818,7 @@ int main(int argc, char* argv[])
     else if (power_control::powerButtonConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match powerButtonEventMonitor =
+        static sdbusplus::bus::match::match powerButtonEventMonitor =
             power_control::powerButtonEventMonitor(power_control::conn);
     }
     else
@@ -2844,7 +2844,7 @@ int main(int argc, char* argv[])
     else if (power_control::resetButtonConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match resetButtonEventMonitor =
+        static sdbusplus::bus::match::match resetButtonEventMonitor =
             power_control::resetButtonEventMonitor(power_control::conn);
     }
     else
@@ -2868,7 +2868,7 @@ int main(int argc, char* argv[])
     else if (power_control::nmiButtonConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match nmiButtonEventMonitor =
+        static sdbusplus::bus::match::match nmiButtonEventMonitor =
             power_control::nmiButtonEventMonitor(power_control::conn);
     }
 
@@ -2886,7 +2886,7 @@ int main(int argc, char* argv[])
     else if (power_control::idButtonConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match idButtonEventMonitor =
+        static sdbusplus::bus::match::match idButtonEventMonitor =
             power_control::idButtonEventMonitor(power_control::conn);
     }
 
@@ -2906,7 +2906,7 @@ int main(int argc, char* argv[])
     else if (power_control::postCompleteConfig.type ==
              power_control::ConfigType::DBUS)
     {
-        sdbusplus::bus::match::match postCompleteEventMonitor =
+        static sdbusplus::bus::match::match postCompleteEventMonitor =
             power_control::postCompleteEventMonitor(power_control::conn);
     }
     else
