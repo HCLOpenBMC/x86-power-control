@@ -1,7 +1,7 @@
 [Unit]
 Description=Intel Power Control
-After=xyz.openbmc_project.Misc.Ipmi
-Wants=xyz.openbmc_project.Misc.Ipmi
+After=xyz.openbmc_project.Chassis.Event
+Wants=xyz.openbmc_project.Chassis.Event
 [Service]
 Restart=always
 RestartSec=3

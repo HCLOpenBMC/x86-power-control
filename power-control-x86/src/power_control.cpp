@@ -2257,7 +2257,7 @@ static int loadConfigValues()
 }
 
 inline static sdbusplus::bus::match::match
-    startPulseEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+    powerButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2271,9 +2271,6 @@ inline static sdbusplus::bus::match::match
         }
         std::string event = propertiesChanged.begin()->first;
         bool value = std::get<bool>(propertiesChanged.begin()->second);
-
-        std::cerr << "Host" << power_control::node << ": "
-                  << "Event :" << event << "  Varient :" << value << "\n";
 
         if (event == powerButtonConfig.lineName)
         {
@@ -2296,7 +2293,39 @@ inline static sdbusplus::bus::match::match
                 powerButtonIface->set_property("ButtonPressed", false);
             }
         }
-        else if (event == resetButtonConfig.lineName)
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            powerButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    resetButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if (event == resetButtonConfig.lineName)
         {
             if (value == false)
             {
@@ -2317,31 +2346,192 @@ inline static sdbusplus::bus::match::match
                 resetButtonIface->set_property("ButtonPressed", false);
             }
         }
-        else if ((event == powerOkConfig.lineName))
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            resetButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    powerOkEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == powerOkConfig.lineName))
         {
             Event powerControlEvent =
                 value ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
             sendPowerControlEvent(powerControlEvent);
         }
-        else if ((event == sioPwrGoodConfig.lineName))
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            powerOkConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    sioPowerGoodEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == sioPwrGoodConfig.lineName))
         {
             Event powerControlEvent =
                 value ? Event::sioPowerGoodAssert : Event::sioPowerGoodDeAssert;
 
             sendPowerControlEvent(powerControlEvent);
         }
-        else if ((event == sioOnControlConfig.lineName))
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            sioPwrGoodConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    sioOnControlEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == sioOnControlConfig.lineName))
         {
             std::cerr << "SIO_ONCONTROL value changed: " << value << "\n";
         }
-        else if ((event == sioS5Config.lineName))
+
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            sioOnControlConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    sioS5EventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == sioS5Config.lineName))
         {
             Event powerControlEvent =
                 value ? Event::sioS5DeAssert : Event::sioS5Assert;
 
             sendPowerControlEvent(powerControlEvent);
         }
-        else if ((event == nmiButtonConfig.lineName))
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            sioS5Config.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    nmiButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == nmiButtonConfig.lineName))
         {
             if (value)
             {
@@ -2361,7 +2551,39 @@ inline static sdbusplus::bus::match::match
                 }
             }
         }
-        else if ((event == idButtonConfig.lineName))
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            nmiButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    idButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == idButtonConfig.lineName))
         {
             if (value)
             {
@@ -2372,7 +2594,39 @@ inline static sdbusplus::bus::match::match
                 idButtonIface->set_property("ButtonPressed", true);
             }
         }
-        else if ((event == postCompleteConfig.lineName))
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            idButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match
+    postCompleteEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == postCompleteConfig.lineName))
         {
             if (value)
             {
@@ -2396,7 +2650,8 @@ inline static sdbusplus::bus::match::match
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
         "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='xyz.openbmc_project.Chassis.Event'",
+        "PropertiesChanged',arg0namespace='" +
+            postCompleteConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
     return pulseEventMatcher;
@@ -2436,9 +2691,6 @@ int main(int argc, char* argv[])
                   << "Error in Parsing...\n";
     }
 
-    sdbusplus::bus::match::match pulseEventMonitor =
-        power_control::startPulseEventMonitor(power_control::conn);
-
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
     power_control::conn->request_name("xyz.openbmc_project.State.Chassis");
@@ -2460,8 +2712,14 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::powerOkConfig.type !=
+    else if (power_control::powerOkConfig.type ==
              power_control::ConfigType::DBUS)
+    {
+
+        sdbusplus::bus::match::match powerOkEventMonitor =
+            power_control::powerOkEventMonitor(power_control::conn);
+    }
+    else
     {
         std::cerr
             << "PowerOk name should be configured from json config file\n";
@@ -2481,8 +2739,14 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::sioPwrGoodConfig.type !=
+    else if (power_control::sioPwrGoodConfig.type ==
              power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match sioPwrGoodEventMonitor =
+            power_control::sioPwrGoodEventMonitor(power_control::conn);
+        
+    }
+    else
     {
         std::cerr
             << "sioPwrGood name should be configured from json config file\n";
@@ -2502,8 +2766,13 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::sioOnControlConfig.type !=
+    else if (power_control::sioOnControlConfig.type ==
              power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match sioOnControlEventMonitor =
+            power_control::sioOnControlEventMonitor(power_control::conn);
+    }
+    else
     {
         std::cerr
             << "sioOnControl name should be configured from json config file\n";
@@ -2521,7 +2790,12 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::sioS5Config.type != power_control::ConfigType::DBUS)
+    else if (power_control::sioS5Config.type == power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match sioS5EventMonitor =
+            power_control::sioS5EventMonitor(power_control::conn);
+    }
+    else
     {
         std::cerr << "sioS5 name should be configured from json config file\n";
         return -1;
@@ -2541,8 +2815,13 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::powerButtonConfig.type !=
+    else if (power_control::powerButtonConfig.type ==
              power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match powerButtonEventMonitor =
+            power_control::powerButtonEventMonitor(power_control::conn);
+    }
+    else
     {
         std::cerr
             << "powerButton name should be configured from json config file\n";
@@ -2562,8 +2841,13 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::resetButtonConfig.type !=
+    else if (power_control::resetButtonConfig.type ==
              power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match resetButtonEventMonitor =
+            power_control::resetButtonEventMonitor(power_control::conn);
+    }
+    else
     {
         std::cerr
             << "resetButton name should be configured from json config file\n";
@@ -2571,21 +2855,39 @@ int main(int argc, char* argv[])
     }
 
     // Request NMI_BUTTON GPIO events
-    if (!power_control::nmiButtonConfig.lineName.empty())
+    if (power_control::nmiButtonConfig.type == power_control::ConfigType::GPIO)
     {
-        power_control::requestGPIOEvents(
-            power_control::nmiButtonConfig.lineName,
-            power_control::nmiButtonHandler, power_control::nmiButtonLine,
-            power_control::nmiButtonEvent);
+        if (!power_control::nmiButtonConfig.lineName.empty())
+        {
+            power_control::requestGPIOEvents(
+                power_control::nmiButtonConfig.lineName,
+                power_control::nmiButtonHandler, power_control::nmiButtonLine,
+                power_control::nmiButtonEvent);
+        }
+    }
+    else if (power_control::nmiButtonConfig.type ==
+             power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match nmiButtonEventMonitor =
+            power_control::nmiButtonEventMonitor(power_control::conn);
     }
 
     // Request ID_BUTTON GPIO events
-    if (!power_control::idButtonConfig.lineName.empty())
+    if (power_control::idButtonConfig.type == power_control::ConfigType::GPIO)
     {
-        power_control::requestGPIOEvents(power_control::idButtonConfig.lineName,
-                                         power_control::idButtonHandler,
-                                         power_control::idButtonLine,
-                                         power_control::idButtonEvent);
+        if (!power_control::idButtonConfig.lineName.empty())
+        {
+            power_control::requestGPIOEvents(
+                power_control::idButtonConfig.lineName,
+                power_control::idButtonHandler, power_control::idButtonLine,
+                power_control::idButtonEvent);
+        }
+    }
+    else if (power_control::idButtonConfig.type ==
+             power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match idButtonEventMonitor =
+            power_control::idButtonEventMonitor(power_control::conn);
     }
 
     // Request POST_COMPLETE GPIO events
@@ -2601,8 +2903,13 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
-    else if (power_control::postCompleteConfig.type !=
+    else if (power_control::postCompleteConfig.type ==
              power_control::ConfigType::DBUS)
+    {
+        sdbusplus::bus::match::match postCompleteEventMonitor =
+            power_control::postCompleteEventMonitor(power_control::conn);
+    }
+    else
     {
         std::cerr
             << "postComplete name should be configured from json config file\n";
