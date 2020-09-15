@@ -1,47 +1,62 @@
 [
     {
+        "Name" : "IdButton",
+        "LineName" : "ID_BUTTON",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "NMIButton",
+        "LineName" : "NMI_BUTTON",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "NMIOut",
+        "LineName" : "NMI_OUT",
+        "Type" : "GPIO"
+    },
+    {
         "Name" : "PostComplete",
         "LineName" : "POST_COMPLETE",
         "Type" : "GPIO"
     },
-
     {
         "Name" : "PowerButton",
-        "DbusName" : "xyz.openbmc_project.Chassis.Event",
-        "Path" : "/xyz/openbmc_project/Chassis/Event",
-        "Interface" : "xyz.openbmc_project.Chassis.Event",
-        "Property" : "PowerButton_Host1",
-        "Type" : "DBUS"
-    },
-
-    {
-        "Name" : "PowerOk",
-        "DbusName" : "xyz.openbmc_project.Chassis.Event",
-        "Path" : "/xyz/openbmc_project/Chassis/Event",
-        "Interface" : "xyz.openbmc_project.Chassis.Event",
-        "Property" : "Power_Good_Host1",
-        "Type" : "DBUS"
-    },
-
-
-    {
-        "Name" : "ResetButton",
-        "DbusName" : "xyz.openbmc_project.Chassis.Event",
-        "Path" : "/xyz/openbmc_project/Chassis/Event",
-        "Interface" : "xyz.openbmc_project.Chassis.Event",
-        "Property" : "ResetButton_Host1",
-        "Type" : "DBUS"
-    },
-
-    {
-        "Name" : "PowerOut",
-        "LineName" : "POWER_OUT1",
+        "LineName" : "POWER_BUTTON",
         "Type" : "GPIO"
     },
-
+    {
+        "Name" : "PowerOk",
+        "LineName" : "PS_PWROK",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "PowerOut",
+        "LineName" : "POWER_OUT",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "ResetButton",
+        "LineName" : "RESET_BUTTON",
+        "Type" : "GPIO"
+    },
     {
         "Name" : "ResetOut",
-        "LineName" : "RESET_OUT1",
+        "LineName" : "RESET_OUT",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "SioOnControl",
+        "LineName" : "SIO_ONCONTROL",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "SioPowerGood",
+        "LineName" : "SIO_POWER_GOOD",
+        "Type" : "GPIO"
+    },
+    {
+        "Name" : "SIOS5",
+        "LineName" : "SIO_S5",
         "Type" : "GPIO"
     }
 ]

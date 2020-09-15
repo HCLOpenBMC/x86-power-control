@@ -97,7 +97,6 @@ const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
 
 static bool nmiEnabled = true;
-static bool sioEnabled = true;
 
 // Timers
 // Time holding GPIOs asserted
@@ -1481,15 +1480,8 @@ static void powerStateWaitForPSPowerOK(const Event event)
             // Cancel any GPIO assertions held during the transition
             gpioAssertTimer.cancel();
             psPowerOKWatchdogTimer.cancel();
-            if (sioEnabled == true)
-            {
-                sioPowerGoodWatchdogTimerStart();
-                setPowerState(PowerState::waitForSIOPowerGood);
-            }
-            else
-            {
-                setPowerState(PowerState::on);
-            }
+            sioPowerGoodWatchdogTimerStart();
+            setPowerState(PowerState::waitForSIOPowerGood);
             break;
         case Event::psPowerOKWatchdogTimerExpired:
             setPowerState(PowerState::off);
@@ -1532,14 +1524,7 @@ static void powerStateOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
-            if (sioEnabled == true)
-            {
-                setPowerState(PowerState::waitForSIOPowerGood);
-            }
-            else
-            {
-                setPowerState(PowerState::on);
-            }
+            setPowerState(PowerState::waitForSIOPowerGood);
             break;
         case Event::sioS5DeAssert:
             setPowerState(PowerState::waitForPSPowerOK);
@@ -1606,14 +1591,7 @@ static void powerStateCycleOff(const Event event)
     {
         case Event::psPowerOKAssert:
             powerCycleTimer.cancel();
-            if (sioEnabled == true)
-            {
-                setPowerState(PowerState::waitForSIOPowerGood);
-            }
-            else
-            {
-                setPowerState(PowerState::on);
-            }
+            setPowerState(PowerState::waitForSIOPowerGood);
             break;
         case Event::sioS5DeAssert:
             powerCycleTimer.cancel();
@@ -2256,8 +2234,7 @@ static int loadConfigValues()
     return 0;
 }
 
-inline static sdbusplus::bus::match::match
-    powerButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match powerButtonEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2309,8 +2286,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    resetButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match resetButtonEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2362,8 +2338,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    powerOkEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match powerOkEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2400,8 +2375,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    sioPowerGoodEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match sioPwrGoodEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2439,8 +2413,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    sioOnControlEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match sioOnControlEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2476,8 +2449,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    sioS5EventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match sioS5EventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2515,8 +2487,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    nmiButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match nmiButtonEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2567,8 +2538,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    idButtonEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match idButtonEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2610,8 +2580,7 @@ inline static sdbusplus::bus::match::match
     return pulseEventMatcher;
 }
 
-inline static sdbusplus::bus::match::match
-    postCompleteEventMonitor(std::shared_ptr<sdbusplus::asio::connection> conn)
+inline static sdbusplus::bus::match::match postCompleteEventMonitor()
 {
     auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
         std::string thresholdInterface;
@@ -2717,7 +2686,7 @@ int main(int argc, char* argv[])
     {
 
         static sdbusplus::bus::match::match powerOkEventMonitor =
-            power_control::powerOkEventMonitor(power_control::conn);
+            power_control::powerOkEventMonitor();
     }
     else
     {
@@ -2726,7 +2695,6 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-#if 0
     // Request SIO_POWER_GOOD GPIO events
     if (power_control::sioPwrGoodConfig.type == power_control::ConfigType::GPIO)
     {
@@ -2743,8 +2711,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match sioPwrGoodEventMonitor =
-            power_control::sioPwrGoodEventMonitor(power_control::conn);
-        
+            power_control::sioPwrGoodEventMonitor();
     }
     else
     {
@@ -2770,7 +2737,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match sioOnControlEventMonitor =
-            power_control::sioOnControlEventMonitor(power_control::conn);
+            power_control::sioOnControlEventMonitor();
     }
     else
     {
@@ -2793,14 +2760,13 @@ int main(int argc, char* argv[])
     else if (power_control::sioS5Config.type == power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match sioS5EventMonitor =
-            power_control::sioS5EventMonitor(power_control::conn);
+            power_control::sioS5EventMonitor();
     }
     else
     {
         std::cerr << "sioS5 name should be configured from json config file\n";
         return -1;
     }
-#endif
 
     // Request POWER_BUTTON GPIO events
     if (power_control::powerButtonConfig.type ==
@@ -2819,7 +2785,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match powerButtonEventMonitor =
-            power_control::powerButtonEventMonitor(power_control::conn);
+            power_control::powerButtonEventMonitor();
     }
     else
     {
@@ -2845,7 +2811,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match resetButtonEventMonitor =
-            power_control::resetButtonEventMonitor(power_control::conn);
+            power_control::resetButtonEventMonitor();
     }
     else
     {
@@ -2869,7 +2835,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match nmiButtonEventMonitor =
-            power_control::nmiButtonEventMonitor(power_control::conn);
+            power_control::nmiButtonEventMonitor();
     }
 
     // Request ID_BUTTON GPIO events
@@ -2887,7 +2853,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match idButtonEventMonitor =
-            power_control::idButtonEventMonitor(power_control::conn);
+            power_control::idButtonEventMonitor();
     }
 
     // Request POST_COMPLETE GPIO events
@@ -2907,7 +2873,7 @@ int main(int argc, char* argv[])
              power_control::ConfigType::DBUS)
     {
         static sdbusplus::bus::match::match postCompleteEventMonitor =
-            power_control::postCompleteEventMonitor(power_control::conn);
+            power_control::postCompleteEventMonitor();
     }
     else
     {
