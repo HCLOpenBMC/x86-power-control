@@ -1,6 +1,6 @@
 [Unit]
 Description=Intel Power Control for the Host %i
-ConditionPathExists=/usr/share/x86-power-control/power-config%i.json
+ConditionPathExists=/usr/share/x86-power-control/power-config-host%i.json
 
 [Service]
 Restart=always
