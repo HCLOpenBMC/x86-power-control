@@ -77,7 +77,6 @@ static std::string nmiDbusName = "xyz.openbmc_project.Control.Host.NMI";
 static std::string rstCauseDbusName =
     "xyz.openbmc_project.Control.Host.RestartCause";
 
-
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSysIface;
@@ -108,6 +107,7 @@ const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
 
 static bool nmiEnabled = true;
+static bool sioEnabled = true;
 
 // Timers
 // Time holding GPIOs asserted
@@ -1488,12 +1488,21 @@ static void powerStateWaitForPSPowerOK(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
+        {
             // Cancel any GPIO assertions held during the transition
             gpioAssertTimer.cancel();
             psPowerOKWatchdogTimer.cancel();
-            sioPowerGoodWatchdogTimerStart();
-            setPowerState(PowerState::waitForSIOPowerGood);
+            if (sioEnabled == true)
+            {
+                sioPowerGoodWatchdogTimerStart();
+                setPowerState(PowerState::waitForSIOPowerGood);
+            }
+            else
+            {
+                setPowerState(PowerState::on);
+            }
             break;
+        }
         case Event::psPowerOKWatchdogTimerExpired:
             setPowerState(PowerState::off);
             psPowerOKFailedLog();
@@ -1535,8 +1544,17 @@ static void powerStateOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
-            setPowerState(PowerState::waitForSIOPowerGood);
+        {
+            if (sioEnabled == true)
+            {
+                setPowerState(PowerState::waitForSIOPowerGood);
+            }
+            else
+            {
+                setPowerState(PowerState::on);
+            }
             break;
+        }
         case Event::sioS5DeAssert:
             setPowerState(PowerState::waitForPSPowerOK);
             break;
@@ -1601,9 +1619,18 @@ static void powerStateCycleOff(const Event event)
     switch (event)
     {
         case Event::psPowerOKAssert:
+        {
             powerCycleTimer.cancel();
-            setPowerState(PowerState::waitForSIOPowerGood);
+            if (sioEnabled == true)
+            {
+                setPowerState(PowerState::waitForSIOPowerGood);
+            }
+            else
+            {
+                setPowerState(PowerState::on);
+            }
             break;
+        }
         case Event::sioS5DeAssert:
             powerCycleTimer.cancel();
             setPowerState(PowerState::waitForPSPowerOK);
@@ -2697,6 +2724,14 @@ int main(int argc, char* argv[])
     power_control::conn->request_name(power_control::nmiDbusName.c_str());
     power_control::conn->request_name(power_control::rstCauseDbusName.c_str());
 
+    if (power_control::sioPwrGoodConfig.lineName.empty() ||
+        power_control::sioOnControlConfig.lineName.empty() ||
+        power_control::sioS5Config.lineName.empty())
+    {
+        power_control::sioEnabled = false;
+        std::cerr << "SIO control GPIOs not defined, disable SIO support.\n";
+    }
+
     // Request PS_PWROK GPIO events
     if (power_control::powerOkConfig.type == power_control::ConfigType::GPIO)
     {
@@ -2722,77 +2757,83 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    // Request SIO_POWER_GOOD GPIO events
-    if (power_control::sioPwrGoodConfig.type == power_control::ConfigType::GPIO)
+    if (power_control::sioEnabled == true)
     {
-        if (!power_control::requestGPIOEvents(
-                power_control::sioPwrGoodConfig.lineName,
-                power_control::sioPowerGoodHandler,
-                power_control::sioPowerGoodLine,
-                power_control::sioPowerGoodEvent))
+        // Request SIO_POWER_GOOD GPIO events
+        if (power_control::sioPwrGoodConfig.type ==
+            power_control::ConfigType::GPIO)
         {
+            if (!power_control::requestGPIOEvents(
+                    power_control::sioPwrGoodConfig.lineName,
+                    power_control::sioPowerGoodHandler,
+                    power_control::sioPowerGoodLine,
+                    power_control::sioPowerGoodEvent))
+            {
+                return -1;
+            }
+        }
+        else if (power_control::sioPwrGoodConfig.type ==
+                 power_control::ConfigType::DBUS)
+        {
+            static sdbusplus::bus::match::match sioPwrGoodEventMonitor =
+                power_control::sioPwrGoodEventMonitor();
+        }
+        else
+        {
+            std::cerr << "sioPwrGood name should be configured from json "
+                         "config file\n";
             return -1;
         }
-    }
-    else if (power_control::sioPwrGoodConfig.type ==
-             power_control::ConfigType::DBUS)
-    {
-        static sdbusplus::bus::match::match sioPwrGoodEventMonitor =
-            power_control::sioPwrGoodEventMonitor();
-    }
-    else
-    {
-        std::cerr
-            << "sioPwrGood name should be configured from json config file\n";
-        return -1;
-    }
 
-    // Request SIO_ONCONTROL GPIO events
-    if (power_control::sioOnControlConfig.type ==
-        power_control::ConfigType::GPIO)
-    {
-        if (!power_control::requestGPIOEvents(
-                power_control::sioOnControlConfig.lineName,
-                power_control::sioOnControlHandler,
-                power_control::sioOnControlLine,
-                power_control::sioOnControlEvent))
+        // Request SIO_ONCONTROL GPIO events
+        if (power_control::sioOnControlConfig.type ==
+            power_control::ConfigType::GPIO)
         {
+            if (!power_control::requestGPIOEvents(
+                    power_control::sioOnControlConfig.lineName,
+                    power_control::sioOnControlHandler,
+                    power_control::sioOnControlLine,
+                    power_control::sioOnControlEvent))
+            {
+                return -1;
+            }
+        }
+        else if (power_control::sioOnControlConfig.type ==
+                 power_control::ConfigType::DBUS)
+        {
+            static sdbusplus::bus::match::match sioOnControlEventMonitor =
+                power_control::sioOnControlEventMonitor();
+        }
+        else
+        {
+            std::cerr << "sioOnControl name should be configured from json "
+                         "config file\n";
             return -1;
         }
-    }
-    else if (power_control::sioOnControlConfig.type ==
-             power_control::ConfigType::DBUS)
-    {
-        static sdbusplus::bus::match::match sioOnControlEventMonitor =
-            power_control::sioOnControlEventMonitor();
-    }
-    else
-    {
-        std::cerr
-            << "sioOnControl name should be configured from json config file\n";
-        return -1;
-    }
 
-    // Request SIO_S5 GPIO events
-    if (power_control::sioS5Config.type == power_control::ConfigType::GPIO)
-    {
-        if (!power_control::requestGPIOEvents(
-                power_control::sioS5Config.lineName,
-                power_control::sioS5Handler, power_control::sioS5Line,
-                power_control::sioS5Event))
+        // Request SIO_S5 GPIO events
+        if (power_control::sioS5Config.type == power_control::ConfigType::GPIO)
         {
+            if (!power_control::requestGPIOEvents(
+                    power_control::sioS5Config.lineName,
+                    power_control::sioS5Handler, power_control::sioS5Line,
+                    power_control::sioS5Event))
+            {
+                return -1;
+            }
+        }
+        else if (power_control::sioS5Config.type ==
+                 power_control::ConfigType::DBUS)
+        {
+            static sdbusplus::bus::match::match sioS5EventMonitor =
+                power_control::sioS5EventMonitor();
+        }
+        else
+        {
+            std::cerr
+                << "sioS5 name should be configured from json config file\n";
             return -1;
         }
-    }
-    else if (power_control::sioS5Config.type == power_control::ConfigType::DBUS)
-    {
-        static sdbusplus::bus::match::match sioS5EventMonitor =
-            power_control::sioS5EventMonitor();
-    }
-    else
-    {
-        std::cerr << "sioS5 name should be configured from json config file\n";
-        return -1;
     }
 
     // Request POWER_BUTTON GPIO events
@@ -2992,7 +3033,7 @@ int main(int argc, char* argv[])
     // Power Control Interface
     power_control::hostIface =
         hostServer.add_interface("/xyz/openbmc_project/state/host0",
-                                 power_control::hostDbusName.c_str());
+                                 "xyz.openbmc_project.State.Host");
 
     power_control::hostIface->register_property(
         "RequestedHostTransition",
@@ -3051,7 +3092,7 @@ int main(int argc, char* argv[])
     // Chassis Control Interface
     power_control::chassisIface =
         chassisServer.add_interface("/xyz/openbmc_project/state/chassis0",
-                                    power_control::chassisDbusName.c_str());
+                                    "xyz.openbmc_project.State.Chassis");
 
     power_control::chassisIface->register_property(
         "RequestedPowerTransition",
@@ -3098,7 +3139,7 @@ int main(int argc, char* argv[])
     // Chassis System Interface
     power_control::chassisSysIface = chassisSysServer.add_interface(
         "/xyz/openbmc_project/state/chassis_system0",
-        power_control::chassisDbusName.c_str());
+        "xyz.openbmc_project.State.Chassis");
 
     power_control::chassisSysIface->register_property(
         "RequestedPowerTransition",
@@ -3135,7 +3176,7 @@ int main(int argc, char* argv[])
     // Power Button Interface
     power_control::powerButtonIface = buttonsServer.add_interface(
         "/xyz/openbmc_project/chassis/buttons/power",
-        power_control::buttonDbusName.c_str());
+        "xyz.openbmc_project.Chassis.Buttons");
 
     power_control::powerButtonIface->register_property(
         "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -3189,7 +3230,7 @@ int main(int argc, char* argv[])
     // Reset Button Interface
     power_control::resetButtonIface = buttonsServer.add_interface(
         "/xyz/openbmc_project/chassis/buttons/reset",
-        power_control::buttonDbusName.c_str());
+        "xyz.openbmc_project.Chassis.Buttons");
 
     power_control::resetButtonIface->register_property(
         "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -3245,7 +3286,7 @@ int main(int argc, char* argv[])
         // NMI Button Interface
         power_control::nmiButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/nmi",
-            power_control::buttonDbusName.c_str());
+            "xyz.openbmc_project.Chassis.Buttons");
 
         power_control::nmiButtonIface->register_property(
             "ButtonMasked", false, [](const bool requested, bool& current) {
@@ -3296,7 +3337,7 @@ int main(int argc, char* argv[])
         // NMI out Interface
         power_control::nmiOutIface =
             nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
-                                       power_control::nmiDbusName.c_str());
+                                       "xyz.openbmc_project.Control.Host.NMI");
         power_control::nmiOutIface->register_method("NMI",
                                                     power_control::nmiReset);
         power_control::nmiOutIface->initialize();
@@ -3307,7 +3348,7 @@ int main(int argc, char* argv[])
         // ID Button Interface
         power_control::idButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/id",
-            power_control::buttonDbusName.c_str());
+            "xyz.openbmc_project.Chassis.Buttons");
 
         // Check ID button state
         bool idButtonPressed;
@@ -3334,7 +3375,7 @@ int main(int argc, char* argv[])
 
     // OS State Interface
     power_control::osIface = osServer.add_interface(
-        "/xyz/openbmc_project/state/os", power_control::osDbusName.c_str());
+        "/xyz/openbmc_project/state/os", "xyz.openbmc_project.State.OperatingSystem.Status");
 
     // Get the initial OS state based on POST complete
     //      0: Asserted, OS state is "Standby" (ready to boot)
@@ -3366,7 +3407,7 @@ int main(int argc, char* argv[])
     // Restart Cause Interface
     power_control::restartCauseIface = restartCauseServer.add_interface(
         "/xyz/openbmc_project/control/host0/restart_cause",
-        power_control::rstCauseDbusName.c_str());
+        "xyz.openbmc_project.Control.Host.RestartCause");
 
     power_control::restartCauseIface->register_property(
         "RestartCause",
