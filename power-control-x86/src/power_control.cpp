@@ -3032,7 +3032,7 @@ int main(int argc, char* argv[])
 
     // Power Control Interface
     power_control::hostIface =
-        hostServer.add_interface("/xyz/openbmc_project/state/host0",
+        hostServer.add_interface("/xyz/openbmc_project/state/host" + power_control::node,
                                  "xyz.openbmc_project.State.Host");
 
     power_control::hostIface->register_property(
@@ -3091,7 +3091,7 @@ int main(int argc, char* argv[])
 
     // Chassis Control Interface
     power_control::chassisIface =
-        chassisServer.add_interface("/xyz/openbmc_project/state/chassis0",
+        chassisServer.add_interface("/xyz/openbmc_project/state/chassis" + power_control::node,
                                     "xyz.openbmc_project.State.Chassis");
 
     power_control::chassisIface->register_property(
@@ -3336,7 +3336,7 @@ int main(int argc, char* argv[])
 
         // NMI out Interface
         power_control::nmiOutIface =
-            nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
+            nmiOutServer.add_interface("/xyz/openbmc_project/control/host" + power_control::node +"/nmi",
                                        "xyz.openbmc_project.Control.Host.NMI");
         power_control::nmiOutIface->register_method("NMI",
                                                     power_control::nmiReset);
@@ -3406,7 +3406,7 @@ int main(int argc, char* argv[])
 
     // Restart Cause Interface
     power_control::restartCauseIface = restartCauseServer.add_interface(
-        "/xyz/openbmc_project/control/host0/restart_cause",
+        "/xyz/openbmc_project/control/host" + power_control::node + "/restart_cause",
         "xyz.openbmc_project.Control.Host.RestartCause");
 
     power_control::restartCauseIface->register_property(
