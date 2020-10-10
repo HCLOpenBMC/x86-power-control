@@ -68,6 +68,7 @@ static ConfigData powerButtonConfig;
 static ConfigData resetButtonConfig;
 static ConfigData idButtonConfig;
 static ConfigData nmiButtonConfig;
+static ConfigData slotPowerConfig;
 
 static std::string hostDbusName = "xyz.openbmc_project.State.Host";
 static std::string chassisDbusName = "xyz.openbmc_project.State.Chassis";
@@ -80,6 +81,7 @@ static std::string rstCauseDbusName =
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSysIface;
+static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSlotIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> powerButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> resetButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> nmiButtonIface;
@@ -102,6 +104,7 @@ const static constexpr int gracefulPowerOffTimeMs = 60000;
 const static constexpr int warmResetCheckTimeMs = 500;
 const static constexpr int buttonMaskTimeMs = 60000;
 const static constexpr int powerOffSaveTimeMs = 7000;
+const static constexpr int slotPowerCycleTimeMs = 200;
 
 const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
@@ -128,6 +131,8 @@ static boost::asio::steady_timer powerStateSaveTimer(io);
 static boost::asio::steady_timer pohCounterTimer(io);
 // Time when to allow restart cause updates
 static boost::asio::steady_timer restartCauseTimer(io);
+// Time between off and on during a slot power cycle
+static boost::asio::steady_timer slotPowerCycleTimer(io);
 
 // GPIO Lines and Event Descriptors
 static gpiod::line psPowerOKLine;
@@ -149,6 +154,7 @@ static boost::asio::posix::stream_descriptor idButtonEvent(io);
 static gpiod::line postCompleteLine;
 static boost::asio::posix::stream_descriptor postCompleteEvent(io);
 static gpiod::line nmiOutLine;
+static gpiod::line slotPowerLine;
 
 static constexpr uint8_t beepPowerFail = 8;
 
@@ -169,6 +175,13 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "/xyz/openbmc_project/BeepCode",
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
+
+enum class SlotPowerState
+{
+    on,
+    off,
+};
+static SlotPowerState slotPowerState;
 
 enum class PowerState
 {
@@ -1110,6 +1123,72 @@ static void powerOn()
 {
     setGPIOOutputForMs(power_control::powerOutConfig.lineName, 0,
                        powerPulseTimeMs);
+}
+
+static int slotPowerOn()
+{
+    if (power_control::slotPowerState != power_control::SlotPowerState::on)
+    {
+        if (setGPIOOutput(slotPowerConfig.lineName, 1, slotPowerLine))
+        {
+            slotPowerState = SlotPowerState::on;
+            std::cerr << "Slot Power is switched On\n";
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        std::cerr << "Slot Power is already in 'On' state\n";
+        return -1;
+    }
+    return 0;
+}
+static int slotPowerOff()
+{
+    if (power_control::slotPowerState != power_control::SlotPowerState::off)
+    {
+        if (setGPIOOutput(slotPowerConfig.lineName, 0, slotPowerLine))
+        {
+            slotPowerState = SlotPowerState::off;
+            setPowerState(PowerState::off);
+            std::cerr << "Slot Power is switched Off\n";
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        std::cerr << "Slot Power is already in 'Off' state\n";
+        return -1;
+    }
+    return 0;
+}
+static void slotPowerCycle()
+{
+    std::cerr << "Slot Power Cycle started\n";
+    slotPowerOff();
+    slotPowerCycleTimer.expires_after(
+        std::chrono::milliseconds(slotPowerCycleTimeMs));
+    slotPowerCycleTimer.async_wait([](const boost::system::error_code ec) {
+        if (ec)
+        {
+            if (ec != boost::asio::error::operation_aborted)
+            {
+                std::cerr << "Slot Power cycle timer async_wait failed: "
+                          << ec.message() << "\n";
+            }
+            std::cerr << "Slot Power cycle timer canceled\n";
+            return;
+        }
+        std::cerr << "Slot Power cycle timer completed\n";
+        slotPowerOn();
+        std::cerr << "Slot Power Cycle Completed\n";
+    });
 }
 
 static void gracefulPowerOff()
@@ -2174,6 +2253,11 @@ static int loadConfigValues()
                 tempData = &sioS5Config;
                 tempData->name = data["Name"];
             }
+			else if (data["Name"] == "SlotPower")
+			{
+				tempData = &slotPowerConfig;
+				tempData->name = data["Name"];
+			}
             else
             {
                 std::cerr << "Undefined Name : " << data["Name"] << "\n";
@@ -2989,6 +3073,15 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+	if (!power_control::slotPowerConfig.lineName.empty())
+    {
+        if (!power_control::setGPIOOutput(power_control::slotPowerConfig.lineName, 1,
+                                          power_control::slotPowerLine))
+        {
+            return -1;
+        }
+    }
+
     // Release line
     line.reset();
 
@@ -3011,6 +3104,17 @@ int main(int argc, char* argv[])
         }
     }
 
+	if (!power_control::slotPowerConfig.lineName.empty())
+    {
+        // Initialize the power slot state
+        power_control::slotPowerState = power_control::SlotPowerState::off;
+        if (power_control::slotPowerLine.get_value() > 0)
+        {
+            power_control::slotPowerState =
+                power_control::SlotPowerState::on;
+        }
+    }
+	
     // Initialize the power state storage
     if (power_control::initializePowerStateStorage() < 0)
     {
@@ -3169,7 +3273,52 @@ int main(int argc, char* argv[])
 
     power_control::chassisSysIface->initialize();
 
-    // Buttons Service
+	if (!power_control::slotPowerConfig.lineName.empty())
+    {
+    // Chassis Slot Interface
+    power_control::chassisSlotIface = chassisSysServer.add_interface(
+        "/xyz/openbmc_project/state/chassis_system" + power_control::node,
+        "xyz.openbmc_project.State.Chassis");
+
+    power_control::chassisSlotIface->register_property(
+        "RequestedPowerTransition",
+        std::string("xyz.openbmc_project.State.Chassis.Transition.On"),
+        [](const std::string& requested, std::string& resp) {
+            if (requested ==
+                "xyz.openbmc_project.State.Chassis.Transition.On")
+            {
+				 power_control::slotPowerOn();
+            }
+            else if (requested ==
+                "xyz.openbmc_project.State.Chassis.Transition.Off")
+            {
+				power_control::slotPowerOff();
+            }
+            else if (requested ==
+                "xyz.openbmc_project.State.Chassis.Transition.powerCycle")
+            {
+				power_control::slotPowerCycle();
+            }
+            else
+            {
+                std::cerr << "Unrecognized chassis system state transition "
+                             "request.\n";
+                throw std::invalid_argument("Unrecognized Transition Request");
+                return 0;
+            }
+            resp = requested;
+            return 1;
+        });
+    power_control::chassisSlotIface->register_property(
+        "CurrentPowerState",
+        std::string(power_control::getChassisState(power_control::powerState)));
+    power_control::chassisSlotIface->register_property(
+        "LastStateChangeTime", power_control::getCurrentTimeMs());
+
+    power_control::chassisSlotIface->initialize();
+	}
+
+	// Buttons Service
     sdbusplus::asio::object_server buttonsServer =
         sdbusplus::asio::object_server(power_control::conn);
 
