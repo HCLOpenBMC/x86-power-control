@@ -1,13 +1,8 @@
 {
-  "IdButton": "ID_BUTTON",
-  "NMIButton": "NMI_BUTTON",
-  "NMIOut": "NMI_OUT",
-  "PostComplete": "POST_COMPLETE",
-  "PwrButton": "POWER_BUTTON",
-  "PwrOK": "PS_PWROK",
-  "PwrOut": "POWER_OUT",
-  "RstButton": "RESET_BUTTON",
-  "RstOut": "RESET_OUT",
+  "PostComplete": "POST_COMPLETE1",
+  "PwrOK": "SLOT1_POWER_OK",
+  "PwrOut": "POWER_OUT1",
+  "RstOut": "RESET_OUT1",
   "SIOOnCtl": "SIO_ONCONTROL",
   "SIOPwrGd": "SIO_POWER_GOOD",
   "SIOS5": "SIO_S5"
