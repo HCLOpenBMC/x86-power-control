@@ -34,7 +34,7 @@ set(
 
 set(
   CONFIG_FILE
-  ${PROJECT_SOURCE_DIR}/config/power-config-host0.json
+  ${PROJECT_SOURCE_DIR}/config/power-config-host1.json
   )
 
 IF(POWER_SLOT_OPTION)
