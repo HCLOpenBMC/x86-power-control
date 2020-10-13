@@ -475,6 +475,21 @@ static constexpr std::string_view getChassisState(const PowerState state)
             break;
     }
 };
+static constexpr std::string_view getSlotState(const SlotPowerState state)
+{
+    switch (state)
+    {
+        case SlotPowerState::on:
+            return "xyz.openbmc_project.State.Chassis.PowerState.On";
+            break;
+        case SlotPowerState::off:
+            return "xyz.openbmc_project.State.Chassis.PowerState.Off";
+            break;
+        default:
+            return "";
+            break;
+    }
+};
 static void savePowerState(const PowerState state)
 {
     powerStateSaveTimer.expires_after(
@@ -509,6 +524,14 @@ static void setPowerState(const PowerState state)
 
     // Save the power state for the restore policy
     savePowerState(state);
+}
+
+static void setSlotPowerState(const SlotPowerState state)
+{
+    slotPowerState = state;
+    chassisSlotIface->set_property("CurrentPowerState",
+                                   std::string(getSlotState(slotPowerState)));
+    chassisSlotIface->set_property("LastStateChangeTime", getCurrentTimeMs());
 }
 
 enum class RestartCause
@@ -1131,7 +1154,7 @@ static int slotPowerOn()
     {
         if (setGPIOOutput(slotPowerConfig.lineName, 1, slotPowerLine))
         {
-            slotPowerState = SlotPowerState::on;
+			setSlotPowerState(SlotPowerState::on);
             std::cerr << "Slot Power is switched On\n";
         }
         else
@@ -1152,7 +1175,7 @@ static int slotPowerOff()
     {
         if (setGPIOOutput(slotPowerConfig.lineName, 0, slotPowerLine))
         {
-            slotPowerState = SlotPowerState::off;
+			setSlotPowerState(SlotPowerState::off);
             setPowerState(PowerState::off);
             std::cerr << "Slot Power is switched Off\n";
         }
@@ -3295,7 +3318,7 @@ int main(int argc, char* argv[])
 				power_control::slotPowerOff();
             }
             else if (requested ==
-                "xyz.openbmc_project.State.Chassis.Transition.powerCycle")
+                "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
 				power_control::slotPowerCycle();
             }
@@ -3311,7 +3334,8 @@ int main(int argc, char* argv[])
         });
     power_control::chassisSlotIface->register_property(
         "CurrentPowerState",
-        std::string(power_control::getChassisState(power_control::powerState)));
+        std::string(power_control::getSlotState(
+                                     power_control::slotPowerState)));
     power_control::chassisSlotIface->register_property(
         "LastStateChangeTime", power_control::getCurrentTimeMs());
 
