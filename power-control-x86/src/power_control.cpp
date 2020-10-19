@@ -2423,8 +2423,9 @@ inline static sdbusplus::bus::match::match powerButtonEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + powerButtonConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             powerButtonConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2475,8 +2476,9 @@ inline static sdbusplus::bus::match::match resetButtonEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + resetButtonConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             resetButtonConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2512,8 +2514,9 @@ inline static sdbusplus::bus::match::match powerOkEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + powerOkConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             powerOkConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2550,8 +2553,9 @@ inline static sdbusplus::bus::match::match sioPwrGoodEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + sioPwrGoodConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             sioPwrGoodConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2586,8 +2590,9 @@ inline static sdbusplus::bus::match::match sioOnControlEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + sioControlConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             sioOnControlConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2624,8 +2629,9 @@ inline static sdbusplus::bus::match::match sioS5EventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + sioS5Config.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             sioS5Config.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2675,8 +2681,9 @@ inline static sdbusplus::bus::match::match nmiButtonEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + nmiButtonConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             nmiButtonConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2717,8 +2724,9 @@ inline static sdbusplus::bus::match::match idButtonEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + idButtonConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             idButtonConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
@@ -2763,8 +2771,9 @@ inline static sdbusplus::bus::match::match postCompleteEventMonitor()
 
     sdbusplus::bus::match::match pulseEventMatcher(
         static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',path='" + postCompleteConfig.path + "',interface='org.freedesktop.DBus.Properties',member='"
-        "PropertiesChanged',arg0namespace='" +
+        "type='signal',path='" + postCompleteConfig.path +
+            "',interface='org.freedesktop.DBus.Properties',member='"
+            "PropertiesChanged',arg0namespace='" +
             postCompleteConfig.dbusName + "'",
         std::move(pulseEventMatcherCallback));
 
