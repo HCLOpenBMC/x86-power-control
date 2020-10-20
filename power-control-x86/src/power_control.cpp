@@ -3334,7 +3334,7 @@ int main(int argc, char* argv[])
     sdbusplus::asio::object_server buttonsServer =
         sdbusplus::asio::object_server(power_control::conn);
 
-    if (power_control::powerButtonConfig.lineName.empty())
+    if (!power_control::powerButtonConfig.lineName.empty())
     {
         // Power Button Interface
         power_control::powerButtonIface = buttonsServer.add_interface(
@@ -3392,7 +3392,7 @@ int main(int argc, char* argv[])
         power_control::powerButtonIface->initialize();
     }
 
-    if (power_control::resetButtonConfig.lineName.empty())
+    if (!power_control::resetButtonConfig.lineName.empty())
     {
         // Reset Button Interface
         power_control::resetButtonIface = buttonsServer.add_interface(
