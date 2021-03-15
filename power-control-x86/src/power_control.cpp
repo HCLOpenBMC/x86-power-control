@@ -2151,6 +2151,7 @@ static int loadConfigValues()
 
 int main(int argc, char* argv[])
 {
+    kumar_change1
     std::cerr << "Start Chassis power control service...\n";
     power_control::conn =
         std::make_shared<sdbusplus::asio::connection>(power_control::io);
@@ -2161,6 +2162,7 @@ int main(int argc, char* argv[])
         std::cerr << "Host" << power_control::node << ": "
                   << "Error in Parsing...\n";
     }
+    kumar_change2
 
     // Request all the dbus names
     power_control::conn->request_name("xyz.openbmc_project.State.Host");
