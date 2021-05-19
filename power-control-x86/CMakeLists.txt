@@ -7,7 +7,7 @@ option (
     CHASSIS_SYSTEM_RESET
     "Enable chassis system power reset to allow removing
      power and restoring back"
-    OFF
+    ON
 )
 option (
     USE_PLT_RST
@@ -51,7 +51,7 @@ set(
   SERVICE_FILES
   ${PROJECT_SOURCE_DIR}/service_files/chassis-system-reset.service
   ${PROJECT_SOURCE_DIR}/service_files/chassis-system-reset.target
-  ${PROJECT_SOURCE_DIR}/service_files/xyz.openbmc_project.Chassis.Control.Power.service
+  ${PROJECT_SOURCE_DIR}/service_files/xyz.openbmc_project.Chassis.Control.Power@.service
   )
 
 set(

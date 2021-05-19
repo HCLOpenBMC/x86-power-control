@@ -39,24 +39,63 @@ std::shared_ptr<sdbusplus::asio::connection> conn;
 
 static std::string node = "0";
 
-static std::string powerOutName;
-static std::string powerOkName;
-static std::string resetOutName;
-static std::string nmiOutName;
-static std::string sioPwrGoodName;
-static std::string sioOnControlName;
-static std::string sioS5Name;
-static std::string postCompleteName;
-static std::string powerButtonName;
-static std::string resetButtonName;
-static std::string idButtonName;
-static std::string nmiButtonName;
+enum class ConfigType
+{
+    GPIO = 1,
+    DBUS
+};
+struct ConfigData
+{
+    std::string name;
+    std::string lineName;
+    std::string dbusName;
+    std::string path;
+    std::string interface;
+    ConfigType type;
+};
+static ConfigData powerOutConfig;
+static ConfigData powerOkConfig;
+static ConfigData resetOutConfig;
+static ConfigData nmiOutConfig;
+static ConfigData sioPwrGoodConfig;
+static ConfigData sioOnControlConfig;
+static ConfigData sioS5Config;
+static ConfigData postCompleteConfig;
+static ConfigData powerButtonConfig;
+static ConfigData resetButtonConfig;
+static ConfigData idButtonConfig;
+static ConfigData nmiButtonConfig;
+static ConfigData slotPowerConfig;
 
+std::map<std::string, ConfigData*> powerSignalMap = 
+{
+    {"PowerOut",&powerOutConfig},
+    {"PowerOk",&powerOkConfig},
+    {"ResetOut",&resetOutConfig},
+    {"NmiOut",&nmiOutConfig},
+    {"SioPwrGood",&sioPwrGoodConfig},
+    {"SioOnControl",&sioOnControlConfig},
+    {"SioS5",&sioS5Config},
+    {"PostComplete",&postCompleteConfig},
+    {"PowerButton",&powerButtonConfig},
+    {"ResetButton",&resetButtonConfig},
+    {"IdButton",&idButtonConfig},
+    {"NmiButton",&nmiButtonConfig},
+    {"SlotPower",&slotPowerConfig}
+};
+static std::string hostDbusName = "xyz.openbmc_project.State.Host";
+static std::string chassisDbusName = "xyz.openbmc_project.State.Chassis";
+static std::string osDbusName = "xyz.openbmc_project.State.OperatingSystem";
+static std::string buttonDbusName = "xyz.openbmc_project.Chassis.Buttons";
+static std::string nmiDbusName = "xyz.openbmc_project.Control.Host.NMI";
+static std::string rstCauseDbusName =
+    "xyz.openbmc_project.Control.Host.RestartCause";
 static std::shared_ptr<sdbusplus::asio::dbus_interface> hostIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisIface;
 #ifdef CHASSIS_SYSTEM_RESET
 static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSysIface;
 #endif
+static std::shared_ptr<sdbusplus::asio::dbus_interface> chassisSlotIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> powerButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> resetButtonIface;
 static std::shared_ptr<sdbusplus::asio::dbus_interface> nmiButtonIface;
@@ -77,7 +116,9 @@ const static constexpr int sioPowerGoodWatchdogTimeMs = 1000;
 const static constexpr int psPowerOKWatchdogTimeMs = 8000;
 const static constexpr int gracefulPowerOffTimeS = 5 * 60;
 const static constexpr int warmResetCheckTimeMs = 500;
+const static constexpr int buttonMaskTimeMs = 60000;
 const static constexpr int powerOffSaveTimeMs = 7000;
+const static constexpr int slotPowerCycleTimeMs = 200;
 
 const static std::filesystem::path powerControlDir = "/var/lib/power-control";
 const static constexpr std::string_view powerStateFile = "power-state";
@@ -104,6 +145,7 @@ static boost::asio::steady_timer powerStateSaveTimer(io);
 static boost::asio::steady_timer pohCounterTimer(io);
 // Time when to allow restart cause updates
 static boost::asio::steady_timer restartCauseTimer(io);
+static boost::asio::steady_timer slotPowerCycleTimer(io);
 
 // GPIO Lines and Event Descriptors
 static gpiod::line psPowerOKLine;
@@ -125,6 +167,7 @@ static boost::asio::posix::stream_descriptor idButtonEvent(io);
 static gpiod::line postCompleteLine;
 static boost::asio::posix::stream_descriptor postCompleteEvent(io);
 static gpiod::line nmiOutLine;
+static gpiod::line slotPowerLine;
 
 static constexpr uint8_t beepPowerFail = 8;
 
@@ -148,6 +191,12 @@ static void beep(const uint8_t& beepPriority)
         "xyz.openbmc_project.BeepCode", "/xyz/openbmc_project/BeepCode",
         "xyz.openbmc_project.BeepCode", "Beep", uint8_t(beepPriority));
 }
+enum class SlotPowerState
+{
+    on,
+    off,
+};
+static SlotPowerState slotPowerState;
 
 enum class PowerState
 {
@@ -450,6 +499,21 @@ static constexpr std::string_view getChassisState(const PowerState state)
             break;
     }
 };
+static constexpr std::string_view getSlotState(const SlotPowerState state)
+{
+    switch (state)
+    {
+        case SlotPowerState::on:
+            return "xyz.openbmc_project.State.Chassis.PowerState.On";
+            break;
+        case SlotPowerState::off:
+            return "xyz.openbmc_project.State.Chassis.PowerState.Off";
+            break;
+        default:
+            return "";
+            break;
+    }
+};
 static void savePowerState(const PowerState state)
 {
     powerStateSaveTimer.expires_after(
@@ -486,6 +550,13 @@ static void setPowerState(const PowerState state)
 
     // Save the power state for the restore policy
     savePowerState(state);
+}
+static void setSlotPowerState(const SlotPowerState state)
+{
+    slotPowerState = state;
+    chassisSlotIface->set_property("CurrentPowerState",
+                                   std::string(getSlotState(slotPowerState)));
+    chassisSlotIface->set_property("LastStateChangeTime", getCurrentTimeMs());
 }
 
 enum class RestartCause
@@ -1089,12 +1160,12 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
                               const int durationMs)
 {
     // If the requested GPIO is masked, use the mask line to set the output
-    if (powerButtonMask && name == power_control::powerOutName)
+    if (powerButtonMask && name == powerOutConfig.lineName)
     {
         return setMaskedGPIOOutputForMs(powerButtonMask, name, value,
                                         durationMs);
     }
-    if (resetButtonMask && name == power_control::resetOutName)
+    if (resetButtonMask && name == resetOutConfig.lineName)
     {
         return setMaskedGPIOOutputForMs(resetButtonMask, name, value,
                                         durationMs);
@@ -1131,17 +1202,84 @@ static int setGPIOOutputForMs(const std::string& name, const int value,
 
 static void powerOn()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(powerOutConfig.lineName, 0,
+                       powerPulseTimeMs);
 }
 
+static int slotPowerOn()
+{
+    if (power_control::slotPowerState != power_control::SlotPowerState::on)
+    {
+        if (setGPIOOutput(slotPowerConfig.lineName, 1, slotPowerLine))
+        {
+            setSlotPowerState(SlotPowerState::on);
+            phosphor::logging::log<phosphor::logging::level::INFO>("Slot Power is switched On\n");
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>( "Slot Power is already in 'On' state\n");
+        return -1;
+    }
+    return 0;
+}
+static int slotPowerOff()
+{
+    if (power_control::slotPowerState != power_control::SlotPowerState::off)
+    {
+        if (setGPIOOutput(slotPowerConfig.lineName, 0, slotPowerLine))
+        {
+            setSlotPowerState(SlotPowerState::off);
+            setPowerState(PowerState::off);
+            phosphor::logging::log<phosphor::logging::level::INFO>("Slot Power is switched Off\n");
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>("Slot Power is already in 'Off' state\n");
+        return -1;
+    }
+    return 0;
+}
+static void slotPowerCycle()
+{
+   phosphor::logging::log<phosphor::logging::level::INFO>( "Slot Power Cycle started\n");
+    slotPowerOff();
+    slotPowerCycleTimer.expires_after(
+        std::chrono::milliseconds(slotPowerCycleTimeMs));
+    slotPowerCycleTimer.async_wait([](const boost::system::error_code ec) {
+        if (ec)
+        {
+            if (ec != boost::asio::error::operation_aborted)
+            {
+                std::string errMsg = "Slot Power cycle timer async_wait failed: " + ec.message() ;
+                phosphor::logging::log<phosphor::logging::level::ERR>(errMsg.c_str());
+            }
+            phosphor::logging::log<phosphor::logging::level::INFO>("Slot Power cycle timer canceled\n");
+            return;
+        }
+        phosphor::logging::log<phosphor::logging::level::INFO>("Slot Power cycle timer completed\n");
+        slotPowerOn();
+        phosphor::logging::log<phosphor::logging::level::INFO>( "Slot Power Cycle Completed\n");
+    });
+}
 static void gracefulPowerOff()
 {
-    setGPIOOutputForMs(power_control::powerOutName, 0, powerPulseTimeMs);
+    setGPIOOutputForMs(powerOutConfig.lineName, 0,
+                       powerPulseTimeMs);
 }
 
 static void forcePowerOff()
 {
-    if (setGPIOOutputForMs(power_control::powerOutName, 0,
+    if (setGPIOOutputForMs(powerOutConfig.lineName, 0,
                            forceOffPulseTimeMs) < 0)
     {
         return;
@@ -1183,7 +1321,8 @@ static void forcePowerOff()
 
 static void reset()
 {
-    setGPIOOutputForMs(power_control::resetOutName, 0, resetPulseTimeMs);
+    setGPIOOutputForMs(resetOutConfig.lineName, 0,
+                       resetPulseTimeMs);
 }
 
 static void gracefulPowerOffTimerStart()
@@ -2027,13 +2166,13 @@ static void nmiReset(void)
 
     phosphor::logging::log<phosphor::logging::level::INFO>("NMI out action");
     nmiOutLine.set_value(value);
-    std::string logMsg = nmiOutName + " set to " + std::to_string(value);
+    std::string logMsg = nmiOutConfig.lineName + " set to " + std::to_string(value);
     phosphor::logging::log<phosphor::logging::level::INFO>(logMsg.c_str());
     gpioAssertTimer.expires_after(std::chrono::milliseconds(nmiOutPulseTimeMs));
     gpioAssertTimer.async_wait([](const boost::system::error_code ec) {
         // restore the NMI_OUT GPIO line back to the opposite value
         nmiOutLine.set_value(!value);
-        std::string logMsg = nmiOutName + " released";
+        std::string logMsg = nmiOutConfig.lineName + " released";
         phosphor::logging::log<phosphor::logging::level::INFO>(logMsg.c_str());
         if (ec)
         {
@@ -2042,7 +2181,7 @@ static void nmiReset(void)
             if (ec != boost::asio::error::operation_aborted)
             {
                 std::string errMsg =
-                    nmiOutName + " async_wait failed: " + ec.message();
+                    nmiOutConfig.lineName + " async_wait failed: " + ec.message();
                 phosphor::logging::log<phosphor::logging::level::ERR>(
                     errMsg.c_str());
             }
@@ -2281,123 +2420,613 @@ static int loadConfigValues()
             "loadConfigValues : Cannot open config path");
         return -1;
     }
-    auto data = nlohmann::json::parse(configFile, nullptr);
+    auto config = nlohmann::json::parse(configFile, nullptr);
 
-    if (data.is_discarded())
+    if (config.is_discarded())
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Power config readings JSON parser failure");
         return -1;
     }
 
-    if (data.contains("IdButton"))
+    ConfigData* tempData;
+    for (auto& data : config)
     {
-        idButtonName = data["IdButton"];
+        if (data.contains("Name"))
+    {
+            std::string signalName = data["Name"];
+            std::string infoString = "data[Name] :" + signalName ; 
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+            infoString.c_str());
+            auto signalMapIter = powerSignalMap.find(signalName);
+            if ( signalMapIter == powerSignalMap.end())
+            {
+                std::string errMsg = "Undefined Name  : " + signalName;
+                phosphor::logging::log<phosphor::logging::level::ERR>(errMsg.c_str());
+                return -1;
+    }
+            else
+            {
+                tempData = signalMapIter->second;
+                tempData->name = signalName;
+                std::string infoString = "tempData->name :" + tempData->name ; 
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                infoString.c_str());
+                infoString = "signalMapIter->second->name :" + signalMapIter->second->name ; 
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                infoString.c_str());
+
+            }
+        }
+        else
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "The 'Name' field must be defined in Json file");
+            return -1;
+        }
+        if (data.contains("Type"))
+    {
+
+            std::string SignalType = data["Type"];
+            std::string infoString = "data[Type] :" + SignalType ; 
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+            infoString.c_str());
+            if (SignalType == "GPIO")
+            {
+                tempData->type = ConfigType::GPIO;
+    }
+            else if (SignalType == "DBUS")
+            {
+                tempData->type = ConfigType::DBUS;
+
+            }
+            else
+            {
+                std::string errMsg = "Undefined Type : " + SignalType;
+                phosphor::logging::log<phosphor::logging::level::ERR>(errMsg.c_str());
+                return -1;
+            }
+            infoString = "tempData->type : " + std::to_string(static_cast<std::underlying_type<ConfigType>::type>(tempData->type));
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+            infoString.c_str());
+        }
+        else
+    {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "The \'Type\' field must be defined in Json file");
+            return -1;
     }
 
-    if (data.contains("NMIButton"))
+        if (tempData->type == ConfigType::GPIO)
+        {
+            if (data.contains("LineName"))
     {
-        nmiButtonName = data["NMIButton"];
+                tempData->lineName = data["LineName"];
+    }
+            else
+    {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "The \'LineName\' field must be defined for GPIO configuration");
+                return -1;
+    }
+        }
+        else
+        {
+            if (data.contains("DbusName"))
+    {
+                tempData->dbusName = data["DbusName"];
+    }
+            else
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "The \'DbusName\' field must be defined for Dbus configuration");
+                return -1;
+            }
+
+            if (data.contains("Path"))
+    {
+                tempData->path = data["Path"];
+    }
+            else
+    {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "The \'Path\' field must be defined for Dbus configuration");
+                return -1;
     }
 
-    if (data.contains("NMIOut"))
+            if (data.contains("Interface"))
     {
-        nmiOutName = data["NMIOut"];
+                tempData->interface = data["Interface"];
+    }
+            else
+    {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "The \'Interface\' field must be defined for Dbus configuration");
+                return -1;
     }
 
-    if (data.contains("PostComplete"))
+            if (data.contains("Property"))
     {
-        postCompleteName = data["PostComplete"];
+                tempData->lineName = data["Property"];
     }
-
-    if (data.contains("PwrButton"))
+            else
     {
-        powerButtonName = data["PwrButton"];
-    }
-
-    if (data.contains("PwrOK"))
-    {
-        powerOkName = data["PwrOK"];
-    }
-
-    if (data.contains("PwrOut"))
-    {
-        powerOutName = data["PwrOut"];
-    }
-
-    if (data.contains("RstButton"))
-    {
-        resetButtonName = data["RstButton"];
-    }
-
-    if (data.contains("RstOut"))
-    {
-        resetOutName = data["RstOut"];
-    }
-
-    if (data.contains("SIOOnCtl"))
-    {
-        sioOnControlName = data["SIOOnCtl"];
-    }
-
-    if (data.contains("SIOPwrGd"))
-    {
-        sioPwrGoodName = data["SIOPwrGd"];
-    }
-
-    if (data.contains("SIOS5"))
-    {
-        sioS5Name = data["SIOS5"];
+                phosphor::logging::log<phosphor::logging::level::ERR>( 
+                    "The \'Property\' field must be defined for Dbus configuration");
+                return -1;
+            }
+        }
     }
 
     return 0;
+}
+
+inline static sdbusplus::bus::match::match powerButtonEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+        if (event == powerButtonConfig.lineName)
+        {
+            if (value == false)
+            {
+                powerButtonPressLog();
+                powerButtonIface->set_property("ButtonPressed", true);
+                if (!powerButtonMask)
+                {
+                    sendPowerControlEvent(Event::powerButtonPressed);
+                    addRestartCause(RestartCause::powerButton);
+                }
+                else
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "power button press masked\n");
+                }
+            }
+            else
+            {
+                powerButtonIface->set_property("ButtonPressed", false);
+            }
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            powerButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+    return pulseEventMatcher;
+}
+inline static sdbusplus::bus::match::match resetButtonEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+        if (event == resetButtonConfig.lineName)
+        {
+            if (value == false)
+            {
+                resetButtonPressLog();
+                resetButtonIface->set_property("ButtonPressed", true);
+                if (!resetButtonMask)
+                {
+                    sendPowerControlEvent(Event::resetButtonPressed);
+                    addRestartCause(RestartCause::resetButton);
+                }
+                else
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>("reset button press masked");
+                }
+            }
+            else
+            {
+                resetButtonIface->set_property("ButtonPressed", false);
+            }
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            resetButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+    return pulseEventMatcher;
+}
+inline static sdbusplus::bus::match::match powerOkEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+        if ((event == powerOkConfig.lineName))
+        {
+            Event powerControlEvent =
+                value ? Event::psPowerOKAssert : Event::psPowerOKDeAssert;
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            powerOkConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+    return pulseEventMatcher;
+}
+inline static sdbusplus::bus::match::match sioPwrGoodEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == sioPwrGoodConfig.lineName))
+        {
+            Event powerControlEvent =
+                value ? Event::sioPowerGoodAssert : Event::sioPowerGoodDeAssert;
+
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            sioPwrGoodConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match sioOnControlEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == sioOnControlConfig.lineName))
+        {
+            std::string errMsg = "SIO_ONCONTROL value changed : " + std::to_string(value);
+            phosphor::logging::log<phosphor::logging::level::ERR>(errMsg.c_str());
+        }
+
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            sioOnControlConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match sioS5EventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == sioS5Config.lineName))
+        {
+            Event powerControlEvent =
+                value ? Event::sioS5DeAssert : Event::sioS5Assert;
+
+            sendPowerControlEvent(powerControlEvent);
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            sioS5Config.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match nmiButtonEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == nmiButtonConfig.lineName))
+        {
+            if (value)
+            {
+                nmiButtonIface->set_property("ButtonPressed", false);
+            }
+            else
+            {
+                nmiButtonPressLog();
+                nmiButtonIface->set_property("ButtonPressed", true);
+                if (nmiButtonMasked)
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>("NMI button press masked");
+                }
+                else
+                {
+                    setNmiSource();
+                }
+            }
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            nmiButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match idButtonEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == idButtonConfig.lineName))
+        {
+            if (value)
+            {
+                idButtonIface->set_property("ButtonPressed", false);
+            }
+            else
+            {
+                idButtonIface->set_property("ButtonPressed", true);
+            }
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            idButtonConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+inline static sdbusplus::bus::match::match postCompleteEventMonitor()
+{
+    auto pulseEventMatcherCallback = [](sdbusplus::message::message& msg) {
+        std::string thresholdInterface;
+        boost::container::flat_map<std::string, std::variant<bool>>
+            propertiesChanged;
+        msg.read(thresholdInterface, propertiesChanged);
+
+        if (propertiesChanged.empty())
+        {
+            return;
+        }
+        std::string event = propertiesChanged.begin()->first;
+        bool value = std::get<bool>(propertiesChanged.begin()->second);
+
+        if ((event == postCompleteConfig.lineName))
+        {
+            if (value)
+            {
+                sendPowerControlEvent(Event::postCompleteDeAssert);
+                osIface->set_property("OperatingSystemState",
+                                      std::string("Inactive"));
+            }
+            else
+            {
+                sendPowerControlEvent(Event::postCompleteAssert);
+                osIface->set_property("OperatingSystemState",
+                                      std::string("Standby"));
+            }
+        }
+        else if (event.empty())
+        {
+            return;
+        }
+    };
+
+    sdbusplus::bus::match::match pulseEventMatcher(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',path='" + postCompleteConfig.path + "',interface='org.freedesktop.DBus.Properties',member='"
+        "PropertiesChanged',arg0namespace='" +
+            postCompleteConfig.dbusName + "'",
+        std::move(pulseEventMatcherCallback));
+
+    return pulseEventMatcher;
+}
+
+int getProperty(ConfigData& configData)
+{
+    auto method = conn->new_method_call(
+        configData.dbusName.c_str(), configData.path.c_str(),
+        "org.freedesktop.DBus.Properties", "Get");
+    method.append(configData.interface.c_str(), configData.lineName.c_str());
+
+    auto reply = conn->call(method);
+    if (reply.is_method_error())
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Error reading from Bus");
+        return -1;
+    }
+    std::variant<int> resp;
+    reply.read(resp);
+    return std::get<int>(resp);
 }
 
 } // namespace power_control
 
 int main(int argc, char* argv[])
 {
+    using namespace power_control;
+    
+	if (argc > 1)
+    {
+        node = argv[1];
+    }
+
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Start Chassis power control service...");
-    power_control::conn =
-        std::make_shared<sdbusplus::asio::connection>(power_control::io);
+    conn = std::make_shared<sdbusplus::asio::connection>(io);
 
     // Load GPIO's through json config file
-    if (power_control::loadConfigValues() == -1)
+    if (loadConfigValues() == -1)
     {
-        std::string errMsg =
-            "Host" + power_control::node + ": " + "Error in Parsing...";
+        std::string errMsg = "Host" + node + ": " + "Error in Parsing...";
         phosphor::logging::log<phosphor::logging::level::ERR>(errMsg.c_str());
     }
 
-    // Request all the dbus names
-    power_control::conn->request_name("xyz.openbmc_project.State.Host");
-    power_control::conn->request_name("xyz.openbmc_project.State.Chassis");
-    power_control::conn->request_name(
-        "xyz.openbmc_project.State.OperatingSystem");
-    power_control::conn->request_name("xyz.openbmc_project.Chassis.Buttons");
-    power_control::conn->request_name("xyz.openbmc_project.Control.Host.NMI");
-    power_control::conn->request_name(
-        "xyz.openbmc_project.Control.Host.RestartCause");
+    hostDbusName =
+        "xyz.openbmc_project.State.Host" + node;
+    chassisDbusName =
+        "xyz.openbmc_project.State.Chassis" + node;
+    osDbusName =
+        "xyz.openbmc_project.State.OperatingSystem" + node;
+    buttonDbusName =
+        "xyz.openbmc_project.Chassis.Buttons" + node;
+    nmiDbusName =
+        "xyz.openbmc_project.Control.Host.NMI" + node;
+    rstCauseDbusName =
+        "xyz.openbmc_project.Control.Host.RestartCause" + node;
 
-    if (power_control::sioPwrGoodName.empty() ||
-        power_control::sioOnControlName.empty() ||
-        power_control::sioS5Name.empty())
+    // Request all the dbus names
+    conn->request_name(hostDbusName.c_str());
+    conn->request_name(chassisDbusName.c_str());
+    conn->request_name(osDbusName.c_str());
+    conn->request_name(buttonDbusName.c_str());
+    conn->request_name(nmiDbusName.c_str());
+    conn->request_name(rstCauseDbusName.c_str());
+
+    if (sioPwrGoodConfig.lineName.empty() ||
+        sioOnControlConfig.lineName.empty() ||
+        sioS5Config.lineName.empty())
     {
-        power_control::sioEnabled = false;
+        sioEnabled = false;
         phosphor::logging::log<phosphor::logging::level::INFO>(
             "SIO control GPIOs not defined, disable SIO support.");
     }
 
     // Request PS_PWROK GPIO events
-    if (!power_control::powerOkName.empty())
+    if (powerOkConfig.type == ConfigType::GPIO)
     {
-        if (!power_control::requestGPIOEvents(
-                power_control::powerOkName, power_control::psPowerOKHandler,
-                power_control::psPowerOKLine, power_control::psPowerOKEvent))
+        if (!requestGPIOEvents(
+                powerOkConfig.lineName,
+                psPowerOKHandler, psPowerOKLine,
+                psPowerOKEvent))
         {
             return -1;
         }
+    }
+    else if (powerOkConfig.type ==
+             ConfigType::DBUS)
+    {
+
+        static sdbusplus::bus::match::match powerOkEventMonitor =  
+			power_control::powerOkEventMonitor();
     }
     else
     {
@@ -2406,107 +3035,188 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (power_control::sioEnabled == true)
+    if (sioEnabled == true)
     {
         // Request SIO_POWER_GOOD GPIO events
-        if (!power_control::requestGPIOEvents(
-                power_control::sioPwrGoodName,
-                power_control::sioPowerGoodHandler,
-                power_control::sioPowerGoodLine,
-                power_control::sioPowerGoodEvent))
+        if (sioPwrGoodConfig.type ==
+            ConfigType::GPIO)
         {
+            if (!requestGPIOEvents(
+                    sioPwrGoodConfig.lineName,
+                    sioPowerGoodHandler,
+                    sioPowerGoodLine,
+                    sioPowerGoodEvent))
+            {
+                return -1;
+            }
+        }
+        else if (sioPwrGoodConfig.type ==
+                 ConfigType::DBUS)
+        {
+            static sdbusplus::bus::match::match sioPwrGoodEventMonitor =
+                power_control::sioPwrGoodEventMonitor();
+        }
+        else
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "sioPwrGood name should be configured from json config file");
             return -1;
         }
 
         // Request SIO_ONCONTROL GPIO events
-        if (!power_control::requestGPIOEvents(
-                power_control::sioOnControlName,
-                power_control::sioOnControlHandler,
-                power_control::sioOnControlLine,
-                power_control::sioOnControlEvent))
+        if (sioOnControlConfig.type ==
+            ConfigType::GPIO)
         {
+            if (!requestGPIOEvents(
+                    sioOnControlConfig.lineName,
+                    sioOnControlHandler,
+                    sioOnControlLine,
+                    sioOnControlEvent))
+            {
+                return -1;
+            }
+        }
+        else if (sioOnControlConfig.type ==
+                 ConfigType::DBUS)
+        {
+            static sdbusplus::bus::match::match sioOnControlEventMonitor =
+                power_control::sioOnControlEventMonitor();
+        }
+        else
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                 "sioOnControl name should be configured from json"
+                         "config file\n");
             return -1;
         }
 
         // Request SIO_S5 GPIO events
-        if (!power_control::requestGPIOEvents(
-                power_control::sioS5Name, power_control::sioS5Handler,
-                power_control::sioS5Line, power_control::sioS5Event))
+        if (sioS5Config.type == ConfigType::GPIO)
         {
+            if (!requestGPIOEvents(
+                    sioS5Config.lineName,
+                    sioS5Handler, sioS5Line,
+                    sioS5Event))
+            {
+                return -1;
+            }
+        }
+        else if (sioS5Config.type ==
+                 ConfigType::DBUS)
+        {
+            static sdbusplus::bus::match::match sioS5EventMonitor =
+                power_control::sioS5EventMonitor();
+        }
+        else
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                 "sioS5 name should be configured from json config file");
             return -1;
         }
     }
 
     // Request POWER_BUTTON GPIO events
-    if (!power_control::powerButtonName.empty())
+    if (powerButtonConfig.type ==
+        ConfigType::GPIO)
     {
-        if (!power_control::requestGPIOEvents(power_control::powerButtonName,
-                                              power_control::powerButtonHandler,
-                                              power_control::powerButtonLine,
-                                              power_control::powerButtonEvent))
+        if (!requestGPIOEvents(
+                powerButtonConfig.lineName,
+                powerButtonHandler,
+                powerButtonLine,
+                powerButtonEvent))
         {
             return -1;
         }
     }
-    else
+    else if (powerButtonConfig.type ==
+             ConfigType::DBUS)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "powerButton name should be configured from json config file");
-        return -1;
+        static sdbusplus::bus::match::match powerButtonEventMonitor =
+            power_control::powerButtonEventMonitor();
     }
 
     // Request RESET_BUTTON GPIO events
-    if (!power_control::resetButtonName.empty())
+    if (resetButtonConfig.type ==
+        ConfigType::GPIO)
     {
-        if (!power_control::requestGPIOEvents(power_control::resetButtonName,
-                                              power_control::resetButtonHandler,
-                                              power_control::resetButtonLine,
-                                              power_control::resetButtonEvent))
+        if (!requestGPIOEvents(
+                resetButtonConfig.lineName,
+                resetButtonHandler,
+                resetButtonLine,
+                resetButtonEvent))
         {
             return -1;
         }
     }
-    else
+    else if (resetButtonConfig.type ==
+             ConfigType::DBUS)
     {
-        phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ResetButton not defined...");
+        static sdbusplus::bus::match::match resetButtonEventMonitor =
+            power_control::resetButtonEventMonitor();
     }
 
     // Request NMI_BUTTON GPIO events
-    if (!power_control::nmiButtonName.empty())
+    if (nmiButtonConfig.type == ConfigType::GPIO)
     {
-        power_control::requestGPIOEvents(
-            power_control::nmiButtonName, power_control::nmiButtonHandler,
-            power_control::nmiButtonLine, power_control::nmiButtonEvent);
+        if (!nmiButtonConfig.lineName.empty())
+        {
+            requestGPIOEvents(
+                nmiButtonConfig.lineName,
+                nmiButtonHandler, nmiButtonLine,
+                nmiButtonEvent);
+        }
+    }
+    else if (nmiButtonConfig.type ==
+             ConfigType::DBUS)
+    {
+        static sdbusplus::bus::match::match nmiButtonEventMonitor =
+            power_control::nmiButtonEventMonitor();
     }
 
     // Request ID_BUTTON GPIO events
-    if (!power_control::idButtonName.empty())
+    if (idButtonConfig.type == ConfigType::GPIO)
     {
-        power_control::requestGPIOEvents(
-            power_control::idButtonName, power_control::idButtonHandler,
-            power_control::idButtonLine, power_control::idButtonEvent);
+        if (!idButtonConfig.lineName.empty())
+        {
+            requestGPIOEvents(
+                idButtonConfig.lineName,
+                idButtonHandler, idButtonLine,
+                idButtonEvent);
+        }
+    }
+    else if (idButtonConfig.type ==
+             ConfigType::DBUS)
+    {
+        static sdbusplus::bus::match::match idButtonEventMonitor =
+            power_control::idButtonEventMonitor();
     }
 
 #ifdef USE_PLT_RST
     sdbusplus::bus::match::match pltRstMatch(
-        *power_control::conn,
+        *conn,
         "type='signal',interface='org.freedesktop.DBus.Properties',member='"
         "PropertiesChanged',arg0='xyz.openbmc_project.State.Host.Misc'",
-        power_control::hostMiscHandler);
+        hostMiscHandler);
 #endif
 
     // Request POST_COMPLETE GPIO events
-    if (!power_control::postCompleteName.empty())
+    if (postCompleteConfig.type ==
+        ConfigType::GPIO)
     {
-        if (!power_control::requestGPIOEvents(
-                power_control::postCompleteName,
-                power_control::postCompleteHandler,
-                power_control::postCompleteLine,
-                power_control::postCompleteEvent))
+        if (!requestGPIOEvents(
+                postCompleteConfig.lineName,
+                postCompleteHandler,
+                postCompleteLine,
+                postCompleteEvent))
         {
             return -1;
         }
+    }
+    else if (postCompleteConfig.type ==
+             ConfigType::DBUS)
+    {
+        static sdbusplus::bus::match::match postCompleteEventMonitor =
+            power_control::postCompleteEventMonitor();
     }
     else
     {
@@ -2516,90 +3226,143 @@ int main(int argc, char* argv[])
     }
 
     // initialize NMI_OUT GPIO.
-    power_control::setGPIOOutput(power_control::nmiOutName, 0,
-                                 power_control::nmiOutLine);
+    if (!nmiOutConfig.lineName.empty())
+    {
+        setGPIOOutput(nmiOutConfig.lineName, 0,
+                                     nmiOutLine);
+    }
 
     // Initialize POWER_OUT and RESET_OUT GPIO.
     gpiod::line line;
-    if (!power_control::setGPIOOutput(power_control::powerOutName, 1, line))
+    if (!powerOutConfig.lineName.empty())
     {
+        if (!setGPIOOutput(
+                powerOutConfig.lineName, 1, line))
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+             "powerOut name should be configured from json config file");
         return -1;
     }
 
-    if (!power_control::setGPIOOutput(power_control::resetOutName, 1, line))
+    if (!resetOutConfig.lineName.empty())
     {
+        if (!setGPIOOutput(
+                resetOutConfig.lineName, 1, line))
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+             "ResetOut name should be configured from json config file");
         return -1;
+    }
+
+    if (!slotPowerConfig.lineName.empty())
+    {
+        if (!setGPIOOutput(
+                slotPowerConfig.lineName, 1,
+                slotPowerLine))
+        {
+            return -1;
+        }
     }
 
     // Release line
     line.reset();
 
     // Initialize the power state
-    power_control::powerState = power_control::PowerState::off;
+    powerState = PowerState::off;
     // Check power good
-    if (power_control::psPowerOKLine.get_value() > 0)
+
+    if (powerOkConfig.type == ConfigType::GPIO)
     {
-        power_control::powerState = power_control::PowerState::on;
+        if (psPowerOKLine.get_value() > 0)
+        {
+            powerState = PowerState::on;
+        }
+    }
+    else
+    {
+        if (getProperty(powerOkConfig))
+        {
+            powerState = PowerState::on;
+        }
+    }
+
+    if (!slotPowerConfig.lineName.empty())
+    {
+        // Initialize the power slot state
+        slotPowerState = SlotPowerState::off;
+        if (slotPowerLine.get_value() > 0)
+        {
+            slotPowerState = SlotPowerState::on;
+        }
     }
 
     // Initialize the power state storage
-    if (power_control::initializePowerStateStorage() < 0)
+    if (initializePowerStateStorage() < 0)
     {
         return -1;
     }
 
     // Check if we need to start the Power Restore policy
-    power_control::powerRestorePolicyCheck();
+    powerRestorePolicyCheck();
 
-    if (power_control::nmiOutLine)
-        power_control::nmiSourcePropertyMonitor();
+    if (nmiOutLine)
+        nmiSourcePropertyMonitor();
 
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Initializing power state. ");
-    power_control::logStateTransition(power_control::powerState);
+    logStateTransition(powerState);
 
     // Power Control Service
     sdbusplus::asio::object_server hostServer =
-        sdbusplus::asio::object_server(power_control::conn);
+        sdbusplus::asio::object_server(conn);
 
     // Power Control Interface
-    power_control::hostIface = hostServer.add_interface(
-        "/xyz/openbmc_project/state/host0", "xyz.openbmc_project.State.Host");
+    hostIface = hostServer.add_interface(
+        "/xyz/openbmc_project/state/host" + node,
+        "xyz.openbmc_project.State.Host");
 
-    power_control::hostIface->register_property(
+    hostIface->register_property(
         "RequestedHostTransition",
         std::string("xyz.openbmc_project.State.Host.Transition.Off"),
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Host.Transition.Off")
             {
-                sendPowerControlEvent(
-                    power_control::Event::gracefulPowerOffRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::gracefulPowerOffRequest);
+                addRestartCause(RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Host.Transition.On")
             {
-                sendPowerControlEvent(power_control::Event::powerOnRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::powerOnRequest);
+                addRestartCause(RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Host.Transition.Reboot")
             {
-                sendPowerControlEvent(power_control::Event::powerCycleRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::powerCycleRequest);
+                addRestartCause(RestartCause::command);
             }
             else if (requested == "xyz.openbmc_project.State.Host.Transition."
                                   "GracefulWarmReboot")
             {
-                sendPowerControlEvent(
-                    power_control::Event::gracefulPowerCycleRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::gracefulPowerCycleRequest);
+                addRestartCause(RestartCause::command);
             }
             else if (requested == "xyz.openbmc_project.State.Host.Transition."
                                   "ForceWarmReboot")
             {
-                sendPowerControlEvent(power_control::Event::resetRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::resetRequest);
+                addRestartCause(RestartCause::command);
             }
             else
             {
@@ -2611,41 +3374,40 @@ int main(int argc, char* argv[])
             resp = requested;
             return 1;
         });
-    power_control::hostIface->register_property(
-        "CurrentHostState",
-        std::string(power_control::getHostState(power_control::powerState)));
+    hostIface->register_property("CurrentHostState",
+                                 std::string(getHostState(powerState)));
 
-    power_control::hostIface->initialize();
+    hostIface->initialize();
 
     // Chassis Control Service
     sdbusplus::asio::object_server chassisServer =
-        sdbusplus::asio::object_server(power_control::conn);
+        sdbusplus::asio::object_server(conn);
 
     // Chassis Control Interface
-    power_control::chassisIface =
-        chassisServer.add_interface("/xyz/openbmc_project/state/chassis0",
-                                    "xyz.openbmc_project.State.Chassis");
+    chassisIface = chassisServer.add_interface(
+        "/xyz/openbmc_project/state/chassis" + node,
+        "xyz.openbmc_project.State.Chassis");
 
-    power_control::chassisIface->register_property(
+    chassisIface->register_property(
         "RequestedPowerTransition",
         std::string("xyz.openbmc_project.State.Chassis.Transition.Off"),
         [](const std::string& requested, std::string& resp) {
             if (requested == "xyz.openbmc_project.State.Chassis.Transition.Off")
             {
-                sendPowerControlEvent(power_control::Event::powerOffRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::powerOffRequest);
+                addRestartCause(RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.On")
             {
-                sendPowerControlEvent(power_control::Event::powerOnRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::powerOnRequest);
+                addRestartCause(RestartCause::command);
             }
             else if (requested ==
                      "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                sendPowerControlEvent(power_control::Event::powerCycleRequest);
-                addRestartCause(power_control::RestartCause::command);
+                sendPowerControlEvent(Event::powerCycleRequest);
+                addRestartCause(RestartCause::command);
             }
             else
             {
@@ -2657,33 +3419,31 @@ int main(int argc, char* argv[])
             resp = requested;
             return 1;
         });
-    power_control::chassisIface->register_property(
-        "CurrentPowerState",
-        std::string(power_control::getChassisState(power_control::powerState)));
-    power_control::chassisIface->register_property(
-        "LastStateChangeTime", power_control::getCurrentTimeMs());
+    chassisIface->register_property("CurrentPowerState",
+                                    std::string(getChassisState(powerState)));
+    chassisIface->register_property("LastStateChangeTime", getCurrentTimeMs());
 
-    power_control::chassisIface->initialize();
+    chassisIface->initialize();
 
 #ifdef CHASSIS_SYSTEM_RESET
     // Chassis System Service
     sdbusplus::asio::object_server chassisSysServer =
-        sdbusplus::asio::object_server(power_control::conn);
+        sdbusplus::asio::object_server(conn);
 
     // Chassis System Interface
-    power_control::chassisSysIface = chassisSysServer.add_interface(
+    chassisSysIface = chassisSysServer.add_interface(
         "/xyz/openbmc_project/state/chassis_system0",
         "xyz.openbmc_project.State.Chassis");
 
-    power_control::chassisSysIface->register_property(
+    chassisSysIface->register_property(
         "RequestedPowerTransition",
         std::string("xyz.openbmc_project.State.Chassis.Transition.On"),
         [](const std::string& requested, std::string& resp) {
             if (requested ==
                 "xyz.openbmc_project.State.Chassis.Transition.PowerCycle")
             {
-                power_control::systemReset();
-                addRestartCause(power_control::RestartCause::command);
+                systemReset();
+                addRestartCause(RestartCause::command);
             }
             else
             {
@@ -2695,35 +3455,81 @@ int main(int argc, char* argv[])
             resp = requested;
             return 1;
         });
-    power_control::chassisSysIface->register_property(
-        "CurrentPowerState",
-        std::string(power_control::getChassisState(power_control::powerState)));
-    power_control::chassisSysIface->register_property(
-        "LastStateChangeTime", power_control::getCurrentTimeMs());
+    chassisSysIface->register_property(
+        "CurrentPowerState", std::string(getChassisState(powerState)));
+    chassisSysIface->register_property("LastStateChangeTime",
+                                       getCurrentTimeMs());
 
-    power_control::chassisSysIface->initialize();
+    chassisSysIface->initialize();
 #endif
 
+    if (!slotPowerConfig.lineName.empty())
+    {
+        // Chassis Slot Interface
+        chassisSlotIface = chassisSysServer.add_interface(
+            "/xyz/openbmc_project/state/chassis_system" + node,
+            "xyz.openbmc_project.State.Chassis");
+
+        chassisSlotIface->register_property(
+            "RequestedPowerTransition",
+            std::string("xyz.openbmc_project.State.Chassis.Transition.On"),
+            [](const std::string& requested, std::string& resp) {
+                if (requested ==
+                    "xyz.openbmc_project.State.Chassis.Transition.On")
+                {
+                    slotPowerOn();
+                }
+                else if (requested ==
+                         "xyz.openbmc_project.State.Chassis.Transition.Off")
+                {
+                    slotPowerOff();
+                }
+                else if (requested == "xyz.openbmc_project.State.Chassis."
+                                      "Transition.PowerCycle")
+                {
+                    slotPowerCycle();
+                }
+                else
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>( 
+                        "Unrecognized chassis system state transition request.\n");
+                    throw std::invalid_argument(
+                        "Unrecognized Transition Request");
+                    return 0;
+                }
+                resp = requested;
+                return 1;
+            });
+        chassisSlotIface->register_property(
+            "CurrentPowerState", std::string(getSlotState(
+                                     slotPowerState)));
+        chassisSlotIface->register_property(
+            "LastStateChangeTime", getCurrentTimeMs());
+
+        chassisSlotIface->initialize();
+    }
     // Buttons Service
     sdbusplus::asio::object_server buttonsServer =
-        sdbusplus::asio::object_server(power_control::conn);
+        sdbusplus::asio::object_server(conn);
 
-    // Power Button Interface
-    power_control::powerButtonIface = buttonsServer.add_interface(
-        "/xyz/openbmc_project/chassis/buttons/power",
-        "xyz.openbmc_project.Chassis.Buttons");
+    if (!powerButtonConfig.lineName.empty())
+    {
+        // Power Button Interface
+        power_control::powerButtonIface = buttonsServer.add_interface(
+            "/xyz/openbmc_project/chassis/buttons/power",
+            "xyz.openbmc_project.Chassis.Buttons");
 
-    power_control::powerButtonIface->register_property(
+    powerButtonIface->register_property(
         "ButtonMasked", false, [](const bool requested, bool& current) {
             if (requested)
             {
-                if (power_control::powerButtonMask)
+                if (powerButtonMask)
                 {
                     return 1;
                 }
-                if (!power_control::setGPIOOutput(
-                        power_control::powerOutName, 1,
-                        power_control::powerButtonMask))
+                if (!setGPIOOutput(
+                        powerOutConfig.lineName, 1,
+                        powerButtonMask))
                 {
                     throw std::runtime_error("Failed to request GPIO");
                     return 0;
@@ -2733,13 +3539,13 @@ int main(int argc, char* argv[])
             }
             else
             {
-                if (!power_control::powerButtonMask)
+                if (!powerButtonMask)
                 {
                     return 1;
                 }
                 phosphor::logging::log<phosphor::logging::level::INFO>(
                     "Power Button Un-masked");
-                power_control::powerButtonMask.reset();
+                powerButtonMask.reset();
             }
             // Update the mask setting
             current = requested;
@@ -2747,30 +3553,42 @@ int main(int argc, char* argv[])
         });
 
     // Check power button state
-    bool powerButtonPressed = power_control::powerButtonLine.get_value() == 0;
-    power_control::powerButtonIface->register_property("ButtonPressed",
+    bool powerButtonPressed;
+    if (powerButtonConfig.type ==
+        ConfigType::GPIO)
+    {
+        powerButtonPressed = powerButtonLine.get_value() == 0;
+    }
+    else
+    {
+        powerButtonPressed =
+            getProperty(powerButtonConfig) == 0;
+    }
+
+    powerButtonIface->register_property("ButtonPressed",
                                                        powerButtonPressed);
 
-    power_control::powerButtonIface->initialize();
+    powerButtonIface->initialize();
+    }
 
-    // Reset Button Interface
-    if (!power_control::resetButtonName.empty())
+    if (!resetButtonConfig.lineName.empty())
     {
-        power_control::resetButtonIface = buttonsServer.add_interface(
+        // Reset Button Interface
+        resetButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/reset",
             "xyz.openbmc_project.Chassis.Buttons");
 
-        power_control::resetButtonIface->register_property(
+        resetButtonIface->register_property(
             "ButtonMasked", false, [](const bool requested, bool& current) {
                 if (requested)
                 {
-                    if (power_control::resetButtonMask)
+                    if (resetButtonMask)
                     {
                         return 1;
                     }
-                    if (!power_control::setGPIOOutput(
-                            power_control::resetOutName, 1,
-                            power_control::resetButtonMask))
+                    if (!setGPIOOutput(
+                            resetOutConfig.lineName, 1,
+                            resetButtonMask))
                     {
                         throw std::runtime_error("Failed to request GPIO");
                         return 0;
@@ -2780,13 +3598,13 @@ int main(int argc, char* argv[])
                 }
                 else
                 {
-                    if (!power_control::resetButtonMask)
+                    if (!resetButtonMask)
                     {
                         return 1;
                     }
                     phosphor::logging::log<phosphor::logging::level::INFO>(
                         "Reset Button Un-masked");
-                    power_control::resetButtonMask.reset();
+                    resetButtonMask.reset();
                 }
                 // Update the mask setting
                 current = requested;
@@ -2794,24 +3612,35 @@ int main(int argc, char* argv[])
             });
 
         // Check reset button state
-        bool resetButtonPressed =
-            power_control::resetButtonLine.get_value() == 0;
-        power_control::resetButtonIface->register_property("ButtonPressed",
+        bool resetButtonPressed;
+        if (resetButtonConfig.type ==
+            ConfigType::GPIO)
+        {
+            resetButtonPressed =
+                resetButtonLine.get_value() == 0;
+        }
+        else
+        {
+            resetButtonPressed = getProperty(
+                                     resetButtonConfig) == 0;
+        }
+
+        resetButtonIface->register_property("ButtonPressed",
                                                            resetButtonPressed);
 
-        power_control::resetButtonIface->initialize();
+        resetButtonIface->initialize();
     }
 
-    if (power_control::nmiButtonLine)
+    if (nmiButtonLine)
     {
         // NMI Button Interface
-        power_control::nmiButtonIface = buttonsServer.add_interface(
+        nmiButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/nmi",
             "xyz.openbmc_project.Chassis.Buttons");
 
-        power_control::nmiButtonIface->register_property(
+        nmiButtonIface->register_property(
             "ButtonMasked", false, [](const bool requested, bool& current) {
-                if (power_control::nmiButtonMasked == requested)
+                if (nmiButtonMasked == requested)
                 {
                     // NMI button mask is already set as requested, so no change
                     return 1;
@@ -2820,100 +3649,130 @@ int main(int argc, char* argv[])
                 {
                     phosphor::logging::log<phosphor::logging::level::INFO>(
                         "NMI Button Masked.");
-                    power_control::nmiButtonMasked = true;
+                    nmiButtonMasked = true;
                 }
                 else
                 {
                     phosphor::logging::log<phosphor::logging::level::INFO>(
                         "NMI Button Un-masked.");
-                    power_control::nmiButtonMasked = false;
+                    nmiButtonMasked = false;
                 }
                 // Update the mask setting
-                current = power_control::nmiButtonMasked;
+                current = nmiButtonMasked;
                 return 1;
             });
 
         // Check NMI button state
-        bool nmiButtonPressed = power_control::nmiButtonLine.get_value() == 0;
-        power_control::nmiButtonIface->register_property("ButtonPressed",
+        bool nmiButtonPressed;
+        if (nmiButtonConfig.type ==
+            ConfigType::GPIO)
+        {
+            nmiButtonPressed = nmiButtonLine.get_value() == 0;
+        }
+        else
+        {
+            nmiButtonPressed = getProperty(nmiButtonConfig) == 0;
+        }
+
+        nmiButtonIface->register_property("ButtonPressed",
                                                          nmiButtonPressed);
 
-        power_control::nmiButtonIface->initialize();
+        nmiButtonIface->initialize();
     }
 
-    if (power_control::nmiOutLine)
+    if (nmiOutLine)
     {
         // NMI out Service
         sdbusplus::asio::object_server nmiOutServer =
-            sdbusplus::asio::object_server(power_control::conn);
+            sdbusplus::asio::object_server(conn);
 
         // NMI out Interface
-        power_control::nmiOutIface =
-            nmiOutServer.add_interface("/xyz/openbmc_project/control/host0/nmi",
-                                       "xyz.openbmc_project.Control.Host.NMI");
-        power_control::nmiOutIface->register_method("NMI",
-                                                    power_control::nmiReset);
-        power_control::nmiOutIface->initialize();
+        nmiOutIface = nmiOutServer.add_interface(
+            "/xyz/openbmc_project/control/host" + node + "/nmi",
+            "xyz.openbmc_project.Control.Host.NMI");
+        nmiOutIface->register_method("NMI",
+                                                    nmiReset);
+        nmiOutIface->initialize();
     }
 
-    if (power_control::idButtonLine)
+    if (idButtonLine)
     {
         // ID Button Interface
-        power_control::idButtonIface = buttonsServer.add_interface(
+        idButtonIface = buttonsServer.add_interface(
             "/xyz/openbmc_project/chassis/buttons/id",
             "xyz.openbmc_project.Chassis.Buttons");
 
         // Check ID button state
-        bool idButtonPressed = power_control::idButtonLine.get_value() == 0;
-        power_control::idButtonIface->register_property("ButtonPressed",
+        bool idButtonPressed;
+        if (idButtonConfig.type ==
+            ConfigType::GPIO)
+        {
+            idButtonPressed = idButtonLine.get_value() == 0;
+        }
+        else
+        {
+            idButtonPressed =
+                getProperty(idButtonConfig) == 0;
+        }
+
+        idButtonIface->register_property("ButtonPressed",
                                                         idButtonPressed);
 
-        power_control::idButtonIface->initialize();
+        idButtonIface->initialize();
     }
 
     // OS State Service
     sdbusplus::asio::object_server osServer =
-        sdbusplus::asio::object_server(power_control::conn);
+        sdbusplus::asio::object_server(conn);
 
     // OS State Interface
-    power_control::osIface = osServer.add_interface(
+    osIface = osServer.add_interface(
         "/xyz/openbmc_project/state/os",
         "xyz.openbmc_project.State.OperatingSystem.Status");
 
     // Get the initial OS state based on POST complete
     //      0: Asserted, OS state is "Standby" (ready to boot)
     //      1: De-Asserted, OS state is "Inactive"
-    std::string osState = power_control::postCompleteLine.get_value() > 0
-                              ? "Inactive"
-                              : "Standby";
+    std::string osState;
+    if (postCompleteConfig.type ==
+        ConfigType::GPIO)
+    {
+        osState = postCompleteLine.get_value() > 0 ? "Inactive"
+                                                                  : "Standby";
+    }
+    else
+    {
+        osState =
+            getProperty(postCompleteConfig) > 0
+                ? "Inactive"
+                : "Standby";
+    }
 
-    power_control::osIface->register_property("OperatingSystemState",
-                                              std::string(osState));
+    osIface->register_property("OperatingSystemState", std::string(osState));
 
-    power_control::osIface->initialize();
+    osIface->initialize();
 
     // Restart Cause Service
     sdbusplus::asio::object_server restartCauseServer =
-        sdbusplus::asio::object_server(power_control::conn);
+        sdbusplus::asio::object_server(conn);
 
     // Restart Cause Interface
-    power_control::restartCauseIface = restartCauseServer.add_interface(
+    restartCauseIface = restartCauseServer.add_interface(
         "/xyz/openbmc_project/control/host0/restart_cause",
         "xyz.openbmc_project.Control.Host.RestartCause");
 
-    power_control::restartCauseIface->register_property(
+    restartCauseIface->register_property(
         "RestartCause",
         std::string("xyz.openbmc_project.State.Host.RestartCause.Unknown"));
 
-    power_control::restartCauseIface->register_property(
+    restartCauseIface->register_property(
         "RequestedRestartCause",
         std::string("xyz.openbmc_project.State.Host.RestartCause.Unknown"),
         [](const std::string& requested, std::string& resp) {
             if (requested ==
                 "xyz.openbmc_project.State.Host.RestartCause.WatchdogTimer")
             {
-                power_control::addRestartCause(
-                    power_control::RestartCause::watchdog);
+                addRestartCause(RestartCause::watchdog);
             }
             else
             {
@@ -2929,11 +3788,11 @@ int main(int argc, char* argv[])
             return 1;
         });
 
-    power_control::restartCauseIface->initialize();
+    restartCauseIface->initialize();
 
-    power_control::currentHostStateMonitor();
+    currentHostStateMonitor();
 
-    power_control::io.run();
+    io.run();
 
     return 0;
 }
