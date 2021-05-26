@@ -20,6 +20,7 @@
       "LineName" : "POST_COMPLETE",
       "Type" : "GPIO"
   },
+
   {
       "Name" : "PowerButton",
       "LineName" : "POWER_BUTTON",
