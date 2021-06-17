@@ -7,7 +7,7 @@ option (
     CHASSIS_SYSTEM_RESET
     "Enable chassis system power reset to allow removing
      power and restoring back"
-    OFF
+    ON
 )
 option (
     USE_PLT_RST
